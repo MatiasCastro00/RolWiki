@@ -1,0 +1,4 @@
+rolkeeper.sqlite3
+rolkeeper.sqlite3-*
+__pycache__/
+*.pyc
