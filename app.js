@@ -6,6 +6,42 @@ const supabaseConfig = window.ROLKEEPER_SUPABASE || {};
 const hasSupabaseConfig = Boolean(supabaseConfig.url && supabaseConfig.anonKey && window.supabase);
 const db = hasSupabaseConfig ? window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey) : null;
 
+const PRESET_SYSTEMS = [
+  "D&D 5e",
+  "Pathfinder 2e",
+  "Call of Cthulhu",
+  "Vampiro: La Mascarada",
+  "Cyberpunk RED",
+  "Blades in the Dark",
+  "Dungeon World",
+  "Mork Borg",
+  "Savage Worlds",
+  "Otro",
+];
+
+const PRESET_CAMPAIGN_TAGS = [
+  "Fantasia oscura",
+  "Alta fantasia",
+  "Horror",
+  "Investigacion",
+  "Politica",
+  "Exploracion",
+  "Supervivencia",
+  "Sandbox",
+  "One-shot",
+  "Campana larga",
+  "Intriga",
+  "Misterio",
+  "Humor",
+  "Drama",
+  "Accion",
+  "Ciencia ficcion",
+  "Postapocaliptico",
+  "Urbano",
+  "Principiantes",
+  "Roleo pesado",
+];
+
 const defaultState = {
   users: [],
   currentUserId: null,
@@ -26,6 +62,112 @@ function uid(prefix) {
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
+}
+
+function splitTags(value) {
+  const seen = new Set();
+  return String(value || "")
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter((tag) => {
+      const key = tag.toLowerCase();
+      if (!tag || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function campaignTags(campaign) {
+  if (Array.isArray(campaign?.tags)) return campaign.tags.filter(Boolean);
+  return splitTags(campaign?.tone);
+}
+
+function formatTags(tags) {
+  return tags.length ? tags.join(", ") : "Sin tags";
+}
+
+function renderSystemOptions(selectedSystem = "") {
+  const selected = selectedSystem || PRESET_SYSTEMS[0];
+  const options = PRESET_SYSTEMS.includes(selected) ? PRESET_SYSTEMS : [selected, ...PRESET_SYSTEMS];
+  return options
+    .map((system) => `<option value="${escapeAttr(system)}" ${system === selected ? "selected" : ""}>${escapeHtml(system)}</option>`)
+    .join("");
+}
+
+function renderTagChips(tags) {
+  return tags
+    .map(
+      (tag) => `
+        <span class="editable-tag">
+          ${escapeHtml(tag)}
+          <button type="button" data-action="remove-tag" data-tag="${escapeAttr(tag)}" aria-label="Quitar ${escapeAttr(tag)}">x</button>
+        </span>
+      `
+    )
+    .join("");
+}
+
+function renderTagPicker(tags = []) {
+  const cleanTags = splitTags(tags.join(","));
+  return `
+    <div class="tag-picker" data-tag-picker>
+      <input type="hidden" name="tags" value="${escapeAttr(cleanTags.join(","))}" />
+      <div class="tag-chip-row" data-tag-chips>${renderTagChips(cleanTags)}</div>
+      <label class="field">
+        <span>Agregar tag</span>
+        <input class="input" data-tag-input list="campaign-tag-suggestions" placeholder="Escribi y elegi una sugerencia" />
+      </label>
+      <datalist id="campaign-tag-suggestions">
+        ${PRESET_CAMPAIGN_TAGS.map((tag) => `<option value="${escapeAttr(tag)}"></option>`).join("")}
+      </datalist>
+      <div class="tag-preset-row">
+        ${PRESET_CAMPAIGN_TAGS.slice(0, 10)
+          .map((tag) => `<button class="tag-preset" type="button" data-action="add-tag" data-tag="${escapeAttr(tag)}">${escapeHtml(tag)}</button>`)
+          .join("")}
+      </div>
+    </div>
+  `;
+}
+
+function updateTagPicker(picker, tags) {
+  const cleanTags = splitTags(tags.join(","));
+  picker.querySelector('input[name="tags"]').value = cleanTags.join(",");
+  picker.querySelector("[data-tag-chips]").innerHTML = renderTagChips(cleanTags);
+}
+
+function addTagFromPicker(input) {
+  const picker = input.closest("[data-tag-picker]");
+  const hidden = picker?.querySelector('input[name="tags"]');
+  const value = input.value.trim().replace(/,$/, "");
+  if (!picker || !hidden || !value) return;
+  updateTagPicker(picker, [...splitTags(hidden.value), value]);
+  input.value = "";
+}
+
+function renderDisplayTags(tags) {
+  return tags.length
+    ? `<div class="display-tags">${tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div>`
+    : "";
+}
+
+function inviteSuggestionsFor(campaign) {
+  const current = currentUser();
+  if (!current) return [];
+  const currentMemberIds = new Set(campaign.members.map((member) => member.userId));
+  const suggestions = new Map();
+
+  for (const ownedCampaign of state.campaigns.filter((item) => item.ownerId === current.id)) {
+    for (const member of ownedCampaign.members) {
+      if (member.userId === current.id || currentMemberIds.has(member.userId)) continue;
+      const user = state.users.find((item) => item.id === member.userId);
+      if (!user?.email) continue;
+      const existing = suggestions.get(user.email) || { user, campaigns: [] };
+      existing.campaigns.push(ownedCampaign.title);
+      suggestions.set(user.email, existing);
+    }
+  }
+
+  return [...suggestions.values()].sort((left, right) => left.user.name.localeCompare(right.user.name));
 }
 
 async function boot() {
@@ -375,12 +517,14 @@ function renderDashboard() {
 
 function renderCampaignCard(campaign) {
   const role = roleFor(campaign, currentUser().id);
+  const tags = campaignTags(campaign);
   return `
     <button class="campaign-card" data-action="open-campaign" data-id="${campaign.id}">
       <div class="campaign-meta">
         <span class="tag gold">${escapeHtml(campaign.system)}</span>
         <span class="tag">${escapeHtml(roleLabel(role))}</span>
         <span class="tag green">${campaign.visibility === "public" ? "Wiki publica" : "Wiki privada"}</span>
+        ${tags.slice(0, 2).map((tag) => `<span class="tag violet">${escapeHtml(tag)}</span>`).join("")}
       </div>
       <div>
         <h3>${escapeHtml(campaign.title)}</h3>
@@ -399,6 +543,7 @@ function renderCampaign() {
   const campaign = campaignById(activeCampaignId);
   const role = roleFor(campaign, currentUser().id);
   const canManage = role === "master";
+  const tags = campaignTags(campaign);
 
   return `
     <main class="page">
@@ -418,9 +563,10 @@ function renderCampaign() {
         <section class="workspace">
           <header class="workspace-hero">
             <div>
-              <span class="eyebrow">${escapeHtml(campaign.tone)}</span>
+              <span class="eyebrow">${escapeHtml(campaign.system)}</span>
               <h1>${escapeHtml(campaign.title)}</h1>
               <p>${escapeHtml(campaign.description)}</p>
+              ${renderDisplayTags(tags)}
             </div>
             <div class="actions-row">
               <button class="button" data-action="go-dashboard"><span class="icon">&lt;</span>Tablero</button>
@@ -618,14 +764,43 @@ function renderMemberRow(member) {
 
 function renderInvitesTab(campaign, canManage) {
   const pending = campaign.invites.filter((invite) => !invite.usedBy);
+  const suggestions = inviteSuggestionsFor(campaign);
   return `
     <div class="content-grid">
       <section class="panel tool-panel">
         <h2>Invitar jugadores</h2>
         ${
           canManage
-            ? `<p class="muted small">Genera un link para que otro usuario se sume como jugador de esta campana.</p>
-               <button class="button primary" data-action="new-invite"><span class="icon">+</span>Generar invitacion</button>`
+            ? `<p class="muted small">Invita por correo y comparte el link generado. Si esa persona ya participo en otra campana tuya, aparece como sugerencia.</p>
+               <form class="form-grid invite-email-form" data-form="invite-email">
+                 <label class="field">
+                   <span>Email del jugador</span>
+                   <input class="input" name="email" type="email" list="invite-email-suggestions" placeholder="jugador@mesa.com" required />
+                 </label>
+                 <datalist id="invite-email-suggestions">
+                   ${suggestions.map((item) => `<option value="${escapeAttr(item.user.email)}">${escapeHtml(item.user.name)}</option>`).join("")}
+                 </datalist>
+                 ${
+                   suggestions.length
+                     ? `<div class="recommendation-row">
+                         ${suggestions
+                           .map(
+                             (item) => `
+                               <button class="recommendation-chip" type="button" data-action="fill-invite-email" data-email="${escapeAttr(item.user.email)}">
+                                 <strong>${escapeHtml(item.user.name)}</strong>
+                                 <span>${escapeHtml(item.user.email)}</span>
+                               </button>
+                             `
+                           )
+                           .join("")}
+                       </div>`
+                     : ""
+                 }
+                 <div class="actions-row">
+                   <button class="button primary" type="submit"><span class="icon">+</span>Crear invitacion</button>
+                   <button class="button" type="button" data-action="new-invite"><span class="icon">#</span>Link sin correo</button>
+                 </div>
+               </form>`
             : `<p class="muted small">Solo el master puede generar invitaciones.</p>`
         }
         <div class="list" style="margin-top: 16px;">
@@ -647,9 +822,11 @@ function renderInvitesTab(campaign, canManage) {
 }
 
 function renderInviteRow(invite) {
+  const invitedUser = invite.invitedUserId ? state.users.find((user) => user.id === invite.invitedUserId) : null;
   return `
     <div class="invite-box">
-      <strong>Invitacion de jugador</strong>
+      <strong>${invite.email ? `Invitacion para ${escapeHtml(invitedUser?.name || invite.email)}` : "Invitacion de jugador"}</strong>
+      ${invite.email ? `<span class="muted small">${escapeHtml(invite.email)}</span>` : ""}
       <div class="copy-line">
         <div class="code-line">${escapeHtml(inviteUrl(invite.token))}</div>
         <button class="button" data-action="copy-invite" data-token="${invite.token}"><span class="icon">C</span>Copiar</button>
@@ -671,12 +848,12 @@ function renderSettingsTab(campaign, canManage) {
               </label>
               <label class="field">
                 <span>Sistema</span>
-                <input class="input" name="system" value="${escapeAttr(campaign.system)}" required />
+                <select class="select" name="system" required>
+                  ${renderSystemOptions(campaign.system)}
+                </select>
               </label>
-              <label class="field">
-                <span>Tono</span>
-                <input class="input" name="tone" value="${escapeAttr(campaign.tone)}" required />
-              </label>
+              <div class="field-label">Tags</div>
+              ${renderTagPicker(campaignTags(campaign))}
               <label class="field">
                 <span>Descripcion</span>
                 <textarea class="textarea" name="description" required>${escapeHtml(campaign.description)}</textarea>
@@ -883,12 +1060,12 @@ function renderCampaignModal() {
           </label>
           <label class="field">
             <span>Sistema</span>
-            <input class="input" name="system" placeholder="D&D 5e, Pathfinder, Cthulhu..." required />
+            <select class="select" name="system" required>
+              ${renderSystemOptions()}
+            </select>
           </label>
-          <label class="field">
-            <span>Tono</span>
-            <input class="input" name="tone" placeholder="Fantasia oscura, horror, aventura..." required />
-          </label>
+          <div class="field-label">Tags</div>
+          ${renderTagPicker(["Fantasia oscura"])}
           <label class="field">
             <span>Descripcion</span>
             <textarea class="textarea" name="description" required></textarea>
@@ -1019,6 +1196,7 @@ document.addEventListener("submit", async (event) => {
   if (!form) return;
   event.preventDefault();
 
+  form.querySelectorAll("[data-tag-input]").forEach(addTagFromPicker);
   const data = Object.fromEntries(new FormData(form).entries());
   const formType = form.dataset.form;
 
@@ -1094,6 +1272,12 @@ document.addEventListener("submit", async (event) => {
     saveState();
     render();
     showToast("Ajustes guardados.");
+    return;
+  }
+
+  if (formType === "invite-email") {
+    createInvite(data.email);
+    return;
   }
 });
 
@@ -1130,6 +1314,33 @@ document.addEventListener("click", async (event) => {
 
   if (action === "login-google") {
     await loginWithGoogle();
+  }
+
+  if (action === "add-tag") {
+    const picker = target.closest("[data-tag-picker]");
+    const hidden = picker?.querySelector('input[name="tags"]');
+    if (picker && hidden) {
+      updateTagPicker(picker, [...splitTags(hidden.value), target.dataset.tag]);
+    }
+  }
+
+  if (action === "remove-tag") {
+    const picker = target.closest("[data-tag-picker]");
+    const hidden = picker?.querySelector('input[name="tags"]');
+    if (picker && hidden) {
+      updateTagPicker(
+        picker,
+        splitTags(hidden.value).filter((tag) => tag.toLowerCase() !== target.dataset.tag.toLowerCase())
+      );
+    }
+  }
+
+  if (action === "fill-invite-email") {
+    const input = document.querySelector('form[data-form="invite-email"] input[name="email"]');
+    if (input) {
+      input.value = target.dataset.email;
+      input.focus();
+    }
   }
 
   if (action === "open-account") {
@@ -1205,6 +1416,22 @@ document.addEventListener("click", async (event) => {
   if (action === "accept-invite") {
     acceptInvite(target.dataset.token);
   }
+});
+
+document.addEventListener("keydown", (event) => {
+  const input = event.target.closest("[data-tag-input]");
+  if (!input) return;
+
+  if (event.key === "Enter" || event.key === ",") {
+    event.preventDefault();
+    addTagFromPicker(input);
+  }
+});
+
+document.addEventListener("change", (event) => {
+  const input = event.target.closest("[data-tag-input]");
+  if (!input) return;
+  addTagFromPicker(input);
 });
 
 window.addEventListener("hashchange", render);
@@ -1381,7 +1608,8 @@ function createCampaign(data) {
     ownerId: currentUser().id,
     title: data.title.trim(),
     system: data.system.trim(),
-    tone: data.tone.trim(),
+    tags: splitTags(data.tags),
+    tone: formatTags(splitTags(data.tags)),
     description: data.description.trim(),
     visibility: "private",
     createdAt: Date.now(),
@@ -1450,7 +1678,8 @@ function saveSettings(data) {
   Object.assign(campaign, {
     title: data.title.trim(),
     system: data.system.trim(),
-    tone: data.tone.trim(),
+    tags: splitTags(data.tags),
+    tone: formatTags(splitTags(data.tags)),
     description: data.description.trim(),
     visibility: data.visibility,
   });
@@ -1472,17 +1701,22 @@ function deleteCharacter(id) {
   showToast("Personaje borrado.");
 }
 
-function createInvite() {
+function createInvite(email = "") {
   const campaign = campaignById(activeCampaignId);
+  const cleanEmail = normalizeEmail(email);
+  const invitedUser = cleanEmail ? state.users.find((user) => user.email === cleanEmail) : null;
+
   campaign.invites.unshift({
     token: uid("invite"),
     role: "player",
+    email: cleanEmail || null,
+    invitedUserId: invitedUser?.id || null,
     createdAt: Date.now(),
     usedBy: null,
   });
   saveState();
   render();
-  showToast("Invitacion generada.");
+  showToast(cleanEmail ? `Invitacion creada para ${cleanEmail}. Copia el link para enviarselo.` : "Invitacion generada.");
 }
 
 function acceptInvite(token) {
@@ -1490,6 +1724,11 @@ function acceptInvite(token) {
   const user = currentUser();
   if (!found || !user) {
     render();
+    return;
+  }
+
+  if (found.invite.email && normalizeEmail(user.email) !== normalizeEmail(found.invite.email)) {
+    showToast(`Esta invitacion es para ${found.invite.email}.`);
     return;
   }
 

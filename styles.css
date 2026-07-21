@@ -377,6 +377,12 @@ p {
   font-weight: 650;
 }
 
+.field-label {
+  color: var(--soft);
+  font-size: 13px;
+  font-weight: 650;
+}
+
 .input,
 .textarea,
 .select {
@@ -531,6 +537,68 @@ p {
 .tag.violet {
   border-color: rgba(155, 140, 255, 0.45);
   color: var(--violet);
+}
+
+.display-tags,
+.tag-chip-row,
+.tag-preset-row,
+.recommendation-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.display-tags {
+  margin-top: 14px;
+}
+
+.tag-picker {
+  display: grid;
+  gap: 10px;
+}
+
+.editable-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 8px 0 10px;
+  border: 1px solid rgba(155, 140, 255, 0.4);
+  border-radius: 999px;
+  color: var(--violet);
+  background: rgba(155, 140, 255, 0.08);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.editable-tag button {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: inherit;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.tag-preset {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tag-preset:hover {
+  border-color: rgba(155, 140, 255, 0.4);
+  color: var(--text);
 }
 
 .campaign-card h3 {
@@ -787,6 +855,36 @@ p {
   border: 1px solid rgba(125, 191, 141, 0.22);
   border-radius: var(--radius);
   background: rgba(125, 191, 141, 0.07);
+}
+
+.invite-email-form {
+  margin-top: 14px;
+}
+
+.recommendation-row {
+  align-items: stretch;
+}
+
+.recommendation-chip {
+  display: grid;
+  gap: 3px;
+  min-width: min(220px, 100%);
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  text-align: left;
+}
+
+.recommendation-chip:hover {
+  border-color: rgba(216, 166, 87, 0.42);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.recommendation-chip span {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .copy-line {

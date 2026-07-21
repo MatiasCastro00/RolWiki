@@ -53,9 +53,11 @@ Mientras todos usen el mismo proyecto de Supabase, las cuentas, campanas, invita
 - Iniciar y cerrar sesion.
 - Editar nombre, email y contrasena desde el perfil.
 - Crear campanas de rol.
+- Elegir sistema desde un desplegable y agregar tags con sugerencias.
 - Editar wiki privada/publica por campana.
 - Generar link publico de wiki.
-- Generar link de invitacion para jugadores.
+- Generar invitaciones para jugadores por correo o por link.
+- Recomendar jugadores que ya participaron en campanas creadas por vos.
 - Aceptar invitaciones.
 - Crear y editar personajes por jugador.
 - Panel de miembros y ajustes de campana.
