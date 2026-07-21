@@ -623,18 +623,20 @@ function renderCampaignCard(campaign) {
       ${image}
       <div class="campaign-meta">
         <span class="tag gold">${escapeHtml(campaign.system)}</span>
-        <span class="tag role">Tu rol: ${escapeHtml(roleLabel(role))}</span>
         <span class="tag green">${campaign.visibility === "public" ? "Wiki publica" : "Wiki privada"}</span>
-        ${tags.slice(0, 2).map((tag) => `<span class="tag violet">${escapeHtml(tag)}</span>`).join("")}
       </div>
       <div>
         <h3>${escapeHtml(campaign.title)}</h3>
+        <span class="campaign-role">${escapeHtml(roleLabel(role))}</span>
         <p>${escapeHtml(campaign.description)}</p>
       </div>
-      <div class="campaign-stats">
-        <span>${campaign.members.length} miembros</span>
-        <span>${campaign.characters.length} personajes</span>
-        <span>${campaign.wiki.length} paginas</span>
+      <div class="campaign-card-footer">
+        <div class="campaign-stats">
+          <span>${campaign.members.length} miembros</span>
+          <span>${campaign.characters.length} personajes</span>
+          <span>${campaign.wiki.length} paginas</span>
+        </div>
+        ${tags.length ? `<div class="campaign-tag-row">${tags.slice(0, 4).map((tag) => `<span class="tag violet">${escapeHtml(tag)}</span>`).join("")}</div>` : ""}
       </div>
     </button>
   `;
