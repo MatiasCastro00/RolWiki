@@ -42,6 +42,118 @@ const PRESET_CAMPAIGN_TAGS = [
   "Roleo pesado",
 ];
 
+const WIKI_CARD_TYPES = {
+  personaje: {
+    label: "Personaje",
+    icon: "♙",
+    description: "Habitantes, protagonistas, aliados y antagonistas.",
+    fields: [
+      ["Rol u oficio", "role", "Ej: Monarca de Luminar"],
+      ["Afiliación", "affiliation", "Ej: Corona de Nédrakar"],
+      ["Estado", "status", "Ej: Activo, desaparecido"],
+    ],
+  },
+  ecologia: {
+    label: "Ecología",
+    icon: "♧",
+    description: "Ecosistemas, biomas y equilibrios naturales.",
+    fields: [
+      ["Bioma", "biome", "Ej: Bosque templado"],
+      ["Clima", "climate", "Ej: Húmedo y frío"],
+      ["Equilibrio", "balance", "Ej: Frágil"],
+    ],
+  },
+  reino: {
+    label: "Reino",
+    icon: "♜",
+    description: "Naciones, culturas, gobiernos y territorios.",
+    fields: [
+      ["Capital", "capital", "Ej: Luminar"],
+      ["Gobernante", "ruler", "Ej: Aureon el Radiante"],
+      ["Población", "population", "Ej: 280.000 habitantes"],
+    ],
+  },
+  mapa: {
+    label: "Mapa",
+    icon: "⌁",
+    description: "Mapas regionales, urbanos y de exploración.",
+    fields: [
+      ["Región", "region", "Ej: Costa occidental"],
+      ["Escala", "scale", "Ej: 1 hex = 10 km"],
+      ["Puntos de interés", "landmarks", "Separados por comas"],
+    ],
+  },
+  fauna: {
+    label: "Fauna",
+    icon: "♞",
+    description: "Criaturas, bestias y especies del mundo.",
+    fields: [
+      ["Hábitat", "habitat", "Ej: Pantanos de Sendaria"],
+      ["Temperamento", "temperament", "Ej: Territorial"],
+      ["Rareza", "rarity", "Ej: Inusual"],
+    ],
+  },
+  flora: {
+    label: "Flora",
+    icon: "⚘",
+    description: "Plantas, hongos y recursos botánicos.",
+    fields: [
+      ["Hábitat", "habitat", "Ej: Bosque profundo"],
+      ["Usos", "uses", "Ej: Medicina, alquimia"],
+      ["Rareza", "rarity", "Ej: Rara"],
+    ],
+  },
+  objeto: {
+    label: "Objeto",
+    icon: "⚔",
+    description: "Artefactos, armas, reliquias y recursos.",
+    fields: [
+      ["Portador", "owner", "Ej: Aureon el Radiante"],
+      ["Origen", "origin", "Ej: Forjas de Luminar"],
+      ["Poderes", "powers", "Ej: Borra recuerdos"],
+    ],
+  },
+  ubicacion: {
+    label: "Ubicación",
+    icon: "⌖",
+    description: "Ciudades, regiones, edificios y lugares.",
+    fields: [
+      ["Región", "region", "Ej: Reino de Luminar"],
+      ["Clase de lugar", "placeKind", "Ej: Ciudad fortificada"],
+      ["Población", "population", "Ej: 24.000 habitantes"],
+    ],
+  },
+  trasfondo: {
+    label: "Trasfondo",
+    icon: "⌛",
+    description: "Historia, acontecimientos, eras y leyendas.",
+    fields: [
+      ["Era", "era", "Ej: Tercera Edad"],
+      ["Evento", "event", "Ej: La Guerra del Olvido"],
+      ["Consecuencias", "impact", "Ej: Caída de la corona"],
+    ],
+  },
+  mundo: {
+    label: "Mundo",
+    icon: "◎",
+    description: "Cosmología, reglas del mundo e ideas centrales.",
+    fields: [
+      ["Cosmología", "cosmology", "Ej: Nueve planos conectados"],
+      ["Lenguas", "languages", "Ej: Común, luminar"],
+      ["Tono", "tone", "Ej: Fantasía melancólica"],
+    ],
+  },
+  nota: {
+    label: "Nota libre",
+    icon: "✎",
+    description: "Ideas, apuntes y contenido sin una estructura fija.",
+    fields: [
+      ["Tema", "topic", "Ej: Misterio pendiente"],
+      ["Fuente", "source", "Ej: Sesión 12"],
+    ],
+  },
+};
+
 const defaultState = {
   users: [],
   currentUserId: null,
@@ -56,6 +168,10 @@ let editing = null;
 let activeCampaignId = null;
 let stateSaveTimer = null;
 let dashboardSearch = "";
+let wikiView = "home";
+let selectedWikiCardId = null;
+let wikiSearch = "";
+let wikiFolder = "all";
 
 function uid(prefix) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}-${Date.now().toString(36)}`;
@@ -649,6 +765,10 @@ function renderCampaign() {
   const canManage = canManageCampaign(campaign, currentUser().id);
   const tags = campaignTags(campaign);
 
+  if (activeTab === "wiki") {
+    return renderWikiWorkspace(campaign, canManage);
+  }
+
   return `
     <main class="page">
       <section class="campaign-layout">
@@ -686,6 +806,32 @@ function renderCampaign() {
   `;
 }
 
+function renderWikiWorkspace(campaign, canManage) {
+  const cards = wikiCardsFor(campaign);
+  return `
+    <main class="wiki-app-shell">
+      <header class="wiki-commandbar">
+        <button class="wiki-world-switch" data-action="go-dashboard" title="Volver al tablero">
+          <span class="wiki-world-mark">${escapeHtml(campaign.title.slice(0, 1).toUpperCase())}</span>
+          <span><strong>${escapeHtml(campaign.title)}</strong><small>${cards.length} fichas conectadas</small></span>
+        </button>
+        <nav class="wiki-primary-nav" aria-label="Navegación de la campaña">
+          <button class="${wikiView === "home" ? "active" : ""}" data-action="set-wiki-view" data-view="home">⌂ Inicio</button>
+          <button class="${wikiView === "cards" ? "active" : ""}" data-action="set-wiki-view" data-view="cards">◈ Tarjetas</button>
+          <button data-action="set-tab" data-tab="characters">♙ Personajes</button>
+          <button data-action="set-tab" data-tab="members">♧ Jugadores</button>
+          <button data-action="set-tab" data-tab="settings">⚙ Ajustes</button>
+        </nav>
+        <div class="wiki-command-actions">
+          <button class="wiki-icon-button" data-action="open-public-wiki" data-id="${campaign.id}" title="Vista pública">↗</button>
+          ${canManage ? `<button class="button wiki-create-button" data-action="new-wiki-page"><span>＋</span>Nueva ficha</button>` : ""}
+        </div>
+      </header>
+      ${wikiView === "cards" ? renderWikiLibrary(campaign, canManage) : renderWikiHome(campaign, canManage)}
+    </main>
+  `;
+}
+
 function navButton(tab, label, icon) {
   return `
     <button class="nav-button ${activeTab === tab ? "active" : ""}" data-action="set-tab" data-tab="${tab}">
@@ -702,68 +848,270 @@ function renderCampaignTab(campaign, role, canManage) {
   return renderWikiTab(campaign, canManage);
 }
 
-function renderWikiTab(campaign, canManage) {
-  const publicPages = campaign.wiki.filter((page) => page.isPublic).length;
-  return `
-    <div class="content-grid">
-      <section class="split-panel">
-        <div class="section-head">
-          <div>
-            <h2>Wiki de la campana</h2>
-            <p>${publicPages} paginas visibles desde el link publico.</p>
-          </div>
-          ${
-            canManage
-              ? `<button class="button primary" data-action="new-wiki-page"><span class="icon">+</span>Nueva pagina</button>`
-              : ""
-          }
-        </div>
-        <div class="list">
-          ${
-            campaign.wiki.length
-              ? campaign.wiki.map((page) => renderWikiRow(page, canManage)).join("")
-              : `<div class="empty-state"><div><h2>La wiki esta vacia</h2><p class="muted">Agrega lore, lugares o resumenes de sesion.</p></div></div>`
-          }
-        </div>
-      </section>
+function wikiCardsFor(campaign) {
+  return (campaign?.wiki || []).map((page) => ({
+    ...page,
+    title: page.title || "Sin título",
+    type: page.type || wikiTypeFromLegacyCategory(page.category),
+    description: page.description ?? page.content ?? "",
+    aliases: Array.isArray(page.aliases) ? page.aliases : [],
+    folder: page.folder || WIKI_CARD_TYPES[page.type]?.label || page.category || "Notas",
+    properties: page.properties && typeof page.properties === "object" ? page.properties : {},
+    relations: Array.isArray(page.relations) ? page.relations : [],
+    modifiedAt: page.modifiedAt || page.createdAt || Date.now(),
+    createdAt: page.createdAt || page.modifiedAt || Date.now(),
+  }));
+}
 
-      <aside class="panel tool-panel">
-        <h2>Vista compartida</h2>
-        <p class="muted small">Solo muestra las paginas marcadas como publicas.</p>
-        <div class="invite-box">
-          <strong>Link de wiki</strong>
-          <div class="copy-line">
-            <div class="code-line">${escapeHtml(publicWikiUrl(campaign.id))}</div>
-            <button class="button" data-action="copy-wiki" data-id="${campaign.id}"><span class="icon">C</span>Copiar</button>
-          </div>
-        </div>
-      </aside>
+function wikiTypeFromLegacyCategory(category) {
+  const normalized = normalizeSearchText(category || "");
+  const match = Object.entries(WIKI_CARD_TYPES).find(([key, value]) =>
+    normalized.includes(normalizeSearchText(value.label)) || normalized.includes(key)
+  );
+  return match?.[0] || "nota";
+}
+
+function wikiType(card) {
+  return WIKI_CARD_TYPES[card?.type] || WIKI_CARD_TYPES.nota;
+}
+
+function cardAllText(card) {
+  return [card.title, ...(card.aliases || []), card.description, ...Object.values(card.properties || {})]
+    .join(" ")
+    .toLowerCase();
+}
+
+function wikiRelations(cards) {
+  const edges = new Map();
+  const addEdge = (sourceId, targetId) => {
+    if (!sourceId || !targetId || sourceId === targetId) return;
+    const key = [sourceId, targetId].sort().join("::");
+    if (!edges.has(key)) edges.set(key, { sourceId, targetId });
+  };
+
+  for (const card of cards) {
+    const haystack = normalizeSearchText(cardAllText(card));
+    for (const other of cards) {
+      if (card.id === other.id) continue;
+      const names = [other.title, ...(other.aliases || [])].map(normalizeSearchText).filter((name) => name.length > 2);
+      if (names.some((name) => haystack.includes(name))) addEdge(card.id, other.id);
+    }
+    for (const targetId of card.relations || []) addEdge(card.id, targetId);
+  }
+  return [...edges.values()];
+}
+
+function wikiGraphPositions(cards) {
+  const centerX = 50;
+  const centerY = 50;
+  return cards.map((card, index) => {
+    if (index === 0) return { id: card.id, x: centerX, y: centerY };
+    const ring = Math.floor((index - 1) / 8) + 1;
+    const ringIndex = (index - 1) % 8;
+    const count = Math.min(8, cards.length - 1 - (ring - 1) * 8);
+    const angle = -Math.PI / 2 + (ringIndex / Math.max(count, 1)) * Math.PI * 2 + ring * 0.28;
+    const radiusX = Math.min(15 + ring * 18, 43);
+    const radiusY = Math.min(12 + ring * 16, 39);
+    return { id: card.id, x: centerX + Math.cos(angle) * radiusX, y: centerY + Math.sin(angle) * radiusY };
+  });
+}
+
+function renderWikiGraph(cards, compact = false) {
+  if (!cards.length) {
+    return `<div class="wiki-graph-empty"><span>◇</span><strong>El mapa está vacío</strong><small>Las conexiones aparecerán cuando una ficha mencione a otra.</small></div>`;
+  }
+  const sorted = [...cards].sort((a, b) => (b.modifiedAt || 0) - (a.modifiedAt || 0)).slice(0, compact ? 18 : 36);
+  const positions = wikiGraphPositions(sorted);
+  const positionById = new Map(positions.map((position) => [position.id, position]));
+  const edges = wikiRelations(sorted).filter((edge) => positionById.has(edge.sourceId) && positionById.has(edge.targetId));
+  return `
+    <div class="wiki-graph ${compact ? "compact" : ""}" aria-label="Mapa de relaciones de la wiki">
+      <svg class="wiki-graph-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        ${edges.map((edge) => {
+          const from = positionById.get(edge.sourceId);
+          const to = positionById.get(edge.targetId);
+          return `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`;
+        }).join("")}
+      </svg>
+      ${sorted.map((card, index) => {
+        const position = positionById.get(card.id);
+        const type = wikiType(card);
+        return `<button class="wiki-node ${index < 3 ? "featured" : ""}" style="left:${position.x}%;top:${position.y}%" data-action="select-wiki-card" data-id="${card.id}" title="Abrir ${escapeAttr(card.title)}">
+          <span class="wiki-node-icon">${type.icon}</span><span>${escapeHtml(card.title)}</span>
+        </button>`;
+      }).join("")}
+      <div class="wiki-graph-legend"><span>${sorted.length} nodos</span><span>${edges.length} conexiones</span></div>
     </div>
   `;
 }
 
-function renderWikiRow(page, canManage) {
+function renderWikiHome(campaign, canManage) {
+  const cards = wikiCardsFor(campaign);
+  const recent = [...cards].sort((a, b) => b.modifiedAt - a.modifiedAt).slice(0, 5);
   return `
-    <article class="row-item">
-      <div class="campaign-meta">
-        <span class="tag">${escapeHtml(page.category)}</span>
-        <span class="tag ${page.isPublic ? "green" : "violet"}">${page.isPublic ? "Publica" : "Privada"}</span>
+    <section class="wiki-home">
+      <div class="wiki-home-copy">
+        <span class="wiki-kicker">ARCHIVO VIVO · ${escapeHtml(campaign.system)}</span>
+        <h1>De nuevo en acción.</h1>
+        <p>¿Adónde te llevará tu imaginación hoy?</p>
+        <div class="wiki-quick-actions">
+          ${canManage ? `<button data-action="new-wiki-page">＋ Crear una ficha</button>` : ""}
+          <button data-action="set-wiki-view" data-view="cards">▦ Explorar tarjetas</button>
+          <button data-action="open-public-wiki" data-id="${campaign.id}">↗ Vista compartida</button>
+        </div>
+        <div class="wiki-recent-head"><span>RECIENTES</span><button data-action="set-wiki-view" data-view="cards">Ver todas</button></div>
+        <div class="wiki-recent-list">
+          ${recent.length ? recent.map((card) => renderWikiRecent(card)).join("") : canManage ? `
+            <button class="wiki-empty-card" data-action="new-wiki-page"><span>＋</span><strong>Crear la primera ficha</strong><small>Personajes, lugares, reinos y todo tu mundo.</small></button>` : `
+            <div class="wiki-empty-card"><span>◇</span><strong>La wiki está vacía</strong><small>Un editor puede crear la primera ficha.</small></div>`}
+        </div>
       </div>
-      <h3>${escapeHtml(page.title)}</h3>
-      <p>${escapeHtml(page.content.slice(0, 220))}${page.content.length > 220 ? "..." : ""}</p>
-      <footer>
-        <span class="muted small">Pagina de wiki</span>
-        ${
-          canManage
-            ? `<div class="actions-row">
-                <button class="button" data-action="edit-wiki" data-id="${page.id}"><span class="icon">E</span>Editar</button>
-                <button class="button danger" data-action="delete-wiki" data-id="${page.id}"><span class="icon">x</span>Borrar</button>
-              </div>`
-            : ""
-        }
-      </footer>
+      <div class="wiki-map-panel">
+        <div class="wiki-map-head"><span>MAPA DE RELACIONES</span><small>Conexiones detectadas por menciones</small></div>
+        ${renderWikiGraph(cards, true)}
+      </div>
+    </section>
+  `;
+}
+
+function renderWikiRecent(card) {
+  const type = wikiType(card);
+  return `<button class="wiki-recent-card" data-action="select-wiki-card" data-id="${card.id}">
+    ${renderWikiThumb(card)}
+    <span class="wiki-recent-copy"><strong>${escapeHtml(card.title)}</strong><small>${type.label} · ${escapeHtml(card.folder)}</small></span>
+    <span class="wiki-time">${relativeWikiTime(card.modifiedAt)}</span>
+    <span class="wiki-row-arrow">›</span>
+  </button>`;
+}
+
+function relativeWikiTime(timestamp) {
+  const difference = Math.max(0, Date.now() - Number(timestamp || 0));
+  const minutes = Math.floor(difference / 60000);
+  if (minutes < 1) return "ahora";
+  if (minutes < 60) return `hace ${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `hace ${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `hace ${days}d`;
+}
+
+function renderWikiThumb(card, className = "") {
+  const type = wikiType(card);
+  return card.imageUrl
+    ? `<img class="wiki-thumb ${className}" src="${escapeAttr(card.imageUrl)}" alt="" loading="lazy" />`
+    : `<span class="wiki-thumb wiki-thumb-fallback ${className}" data-wiki-type="${card.type}">${type.icon}</span>`;
+}
+
+function filteredWikiCards(campaign) {
+  const query = normalizeSearchText(wikiSearch).trim();
+  return wikiCardsFor(campaign).filter((card) => {
+    const matchesFolder = wikiFolder === "all" || card.folder === wikiFolder || card.type === wikiFolder;
+    const matchesQuery = !query || normalizeSearchText(cardAllText(card)).includes(query);
+    return matchesFolder && matchesQuery;
+  });
+}
+
+function renderWikiLibrary(campaign, canManage) {
+  const allCards = wikiCardsFor(campaign);
+  const cards = filteredWikiCards(campaign);
+  const folders = [...new Set(allCards.map((card) => card.folder).filter(Boolean))].sort();
+  const selected = allCards.find((card) => card.id === selectedWikiCardId) || cards[0] || null;
+  if (selected && selectedWikiCardId !== selected.id) selectedWikiCardId = selected.id;
+
+  return `
+    <section class="wiki-library">
+      <aside class="wiki-folder-sidebar">
+        <label class="wiki-search"><span>⌕</span><input data-wiki-search type="search" value="${escapeAttr(wikiSearch)}" placeholder="Buscar en la wiki" aria-label="Buscar en la wiki" /></label>
+        <div class="wiki-tree-title"><span>BIBLIOTECA</span><small>${allCards.length}</small></div>
+        <button class="wiki-folder ${wikiFolder === "all" ? "active" : ""}" data-action="filter-wiki-folder" data-folder="all"><span>▤</span>Todas las fichas<small>${allCards.length}</small></button>
+        ${folders.map((folder) => {
+          const count = allCards.filter((card) => card.folder === folder).length;
+          return `<button class="wiki-folder ${wikiFolder === folder ? "active" : ""}" data-action="filter-wiki-folder" data-folder="${escapeAttr(folder)}"><span>▱</span>${escapeHtml(folder)}<small>${count}</small></button>`;
+        }).join("")}
+        <div class="wiki-tree-divider"></div>
+        <button class="wiki-folder" data-action="set-wiki-view" data-view="home"><span>⌂</span>Inicio</button>
+        <button class="wiki-folder" data-action="open-public-wiki" data-id="${campaign.id}"><span>↗</span>Wiki pública</button>
+      </aside>
+      <section class="wiki-card-column">
+        <div class="wiki-list-head">
+          <div><span>${wikiFolder === "all" ? "TODAS LAS FICHAS" : escapeHtml(wikiFolder).toUpperCase()}</span><small>${cards.length} resultados</small></div>
+          ${canManage ? `<button class="wiki-round-add" data-action="new-wiki-page" aria-label="Nueva ficha">＋</button>` : ""}
+        </div>
+        <div class="wiki-card-list">
+          ${cards.length ? cards.map((card) => renderWikiLibraryRow(card, card.id === selected?.id)).join("") : `<div class="wiki-no-results"><span>⌕</span><strong>Sin resultados</strong><small>Probá con otro término o carpeta.</small></div>`}
+        </div>
+      </section>
+      <section class="wiki-inspector">
+        ${selected ? renderWikiInspector(selected, allCards, canManage) : `<div class="wiki-inspector-empty"><span>◇</span><h2>Seleccioná una ficha</h2><p>Sus propiedades y relaciones aparecerán acá.</p></div>`}
+      </section>
+    </section>
+  `;
+}
+
+function renderWikiLibraryRow(card, isSelected) {
+  const type = wikiType(card);
+  const relations = wikiRelations(wikiCardsFor(campaignById(activeCampaignId))).filter((edge) => edge.sourceId === card.id || edge.targetId === card.id).length;
+  return `<button class="wiki-library-row ${isSelected ? "active" : ""}" data-action="select-wiki-card" data-id="${card.id}">
+    ${renderWikiThumb(card)}
+    <span><strong>${escapeHtml(card.title)}</strong><small>${type.icon} ${type.label} · ${relations} relaciones</small></span>
+    <span>›</span>
+  </button>`;
+}
+
+function renderWikiInspector(card, allCards, canManage) {
+  const type = wikiType(card);
+  const edges = wikiRelations(allCards).filter((edge) => edge.sourceId === card.id || edge.targetId === card.id);
+  const related = edges.map((edge) => allCards.find((item) => item.id === (edge.sourceId === card.id ? edge.targetId : edge.sourceId))).filter(Boolean);
+  const properties = Object.entries(card.properties || {}).filter(([, value]) => String(value || "").trim());
+  return `
+    <article class="wiki-card-detail">
+      <header class="wiki-detail-head">
+        <div><span class="wiki-detail-type">${type.icon} ${type.label}</span><h1>${escapeHtml(card.title)}</h1></div>
+        ${canManage ? `<div class="wiki-detail-actions"><button data-action="edit-wiki" data-id="${card.id}" title="Editar">✎</button><button class="danger" data-action="delete-wiki" data-id="${card.id}" title="Eliminar">×</button></div>` : ""}
+      </header>
+      <div class="wiki-detail-grid">
+        <div class="wiki-detail-main">
+          ${card.aliases.length ? `<div class="wiki-property-row"><span>ALIASES</span><div>${card.aliases.map((alias) => `<em>${escapeHtml(alias)}</em>`).join("")}</div></div>` : ""}
+          <div class="wiki-property-row"><span>CARPETA</span><div><em>▱ ${escapeHtml(card.folder)}</em></div></div>
+          ${properties.map(([key, value]) => `<div class="wiki-property-row"><span>${escapeHtml(propertyLabel(type, key).toUpperCase())}</span><div><strong>${linkMentions(value, allCards, card.id)}</strong></div></div>`).join("")}
+          <section class="wiki-description"><span>DESCRIPCIÓN</span><p>${linkMentions(card.description || "Sin descripción todavía.", allCards, card.id)}</p></section>
+        </div>
+        <div class="wiki-detail-media">${card.imageUrl ? `<img src="${escapeAttr(card.imageUrl)}" alt="Imagen de ${escapeAttr(card.title)}" />` : `<div class="wiki-portrait-placeholder" data-wiki-type="${card.type}"><span>${type.icon}</span><small>Sin imagen</small></div>`}</div>
+      </div>
+      <section class="wiki-relations-section">
+        <div class="wiki-relations-head"><span>RELACIONES</span><small>${related.length} conexiones</small></div>
+        <div class="wiki-relation-chips">${related.length ? related.map((item) => `<button data-action="select-wiki-card" data-id="${item.id}">${wikiType(item).icon} ${escapeHtml(item.title)}</button>`).join("") : `<small>Las relaciones se crean automáticamente cuando esta ficha menciona el nombre o alias de otra.</small>`}</div>
+      </section>
+      <footer class="wiki-detail-footer"><span>${card.isPublic ? "◉ Visible en la wiki pública" : "◌ Solo equipo de campaña"}</span><span>Actualizada ${relativeWikiTime(card.modifiedAt)}</span></footer>
     </article>
   `;
+}
+
+function propertyLabel(type, key) {
+  return type.fields.find(([, fieldKey]) => fieldKey === key)?.[0] || key;
+}
+
+function linkMentions(value, cards, currentId) {
+  const matches = cards
+    .filter((card) => card.id !== currentId)
+    .flatMap((card) => [card.title, ...(card.aliases || [])].map((name) => ({ card, name })))
+    .filter(({ name }) => name && name.length > 2)
+    .sort((a, b) => b.name.length - a.name.length);
+  if (!matches.length) return escapeHtml(value).replaceAll("\n", "<br />");
+  const uniqueMatches = matches.filter(({ name }, index) =>
+    matches.findIndex((candidate) => normalizeSearchText(candidate.name) === normalizeSearchText(name)) === index
+  );
+  const pattern = new RegExp(`(${uniqueMatches.map(({ name }) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "gi");
+  return String(value)
+    .split(pattern)
+    .map((part) => {
+      const match = uniqueMatches.find(({ name }) => normalizeSearchText(name) === normalizeSearchText(part));
+      return match
+        ? `<button class="wiki-inline-link" data-action="select-wiki-card" data-id="${escapeAttr(match.card.id)}">${escapeHtml(part)}</button>`
+        : escapeHtml(part);
+    })
+    .join("")
+    .replaceAll("\n", "<br />");
 }
 
 function renderCharactersTab(campaign, role, canManage) {
@@ -994,7 +1342,7 @@ function renderSettingsTab(campaign, canManage) {
 
 function renderPublicWiki(campaignId) {
   const campaign = campaignById(campaignId);
-  const pages = campaign?.wiki.filter((page) => page.isPublic) || [];
+  const pages = campaign ? wikiCardsFor(campaign).filter((page) => page.isPublic) : [];
   const needsAuth = !currentUser() && !state.campaigns.length;
 
   app.innerHTML = `
@@ -1024,8 +1372,8 @@ function renderPublicWiki(campaignId) {
               <section class="public-pages">
                 ${
                   pages.length
-                    ? pages.map(renderPublicPage).join("")
-                    : `<article class="public-page"><h2>Wiki sin paginas publicas</h2><div>Todavia no se publico contenido.</div></article>`
+                    ? pages.map((page) => renderPublicPage(page, pages)).join("")
+                    : `<article class="public-page"><h2>Wiki sin fichas públicas</h2><div>Todavía no se publicó contenido.</div></article>`
                 }
               </section>`
             : needsAuth
@@ -1037,12 +1385,17 @@ function renderPublicWiki(campaignId) {
   `;
 }
 
-function renderPublicPage(page) {
+function renderPublicPage(page, cards = []) {
+  const type = wikiType(page);
   return `
     <article class="public-page">
-      <span class="tag gold">${escapeHtml(page.category)}</span>
-      <h2>${escapeHtml(page.title)}</h2>
-      <div>${escapeHtml(page.content)}</div>
+      ${page.imageUrl ? `<img class="public-page-image" src="${escapeAttr(page.imageUrl)}" alt="" loading="lazy" />` : ""}
+      <div class="public-page-body">
+        <span class="tag gold">${type.icon} ${escapeHtml(type.label)}</span>
+        <h2>${escapeHtml(page.title)}</h2>
+        ${page.aliases.length ? `<p class="public-aliases">También conocido como ${page.aliases.map(escapeHtml).join(", ")}</p>` : ""}
+        <div>${escapeHtml(page.description)}</div>
+      </div>
     </article>
   `;
 }
@@ -1113,6 +1466,7 @@ function renderModal() {
   if (!editing) return "";
   if (editing.type === "account") return renderAccountModal();
   if (editing.type === "campaign") return renderCampaignModal();
+  if (editing.type === "wiki-type") return renderWikiTypeModal();
   if (editing.type === "wiki") return renderWikiModal(editing.id);
   if (editing.type === "character") return renderCharacterModal(editing.id);
   return "";
@@ -1204,46 +1558,113 @@ function renderCampaignModal() {
   `;
 }
 
-function renderWikiModal(pageId) {
-  const campaign = campaignById(activeCampaignId);
-  const page = campaign.wiki.find((item) => item.id === pageId) || {
-    title: "",
-    category: "Lore",
-    content: "",
-    isPublic: true,
-  };
-
+function renderWikiTypeModal() {
   return `
-    <div class="modal-backdrop">
-      <section class="modal-panel">
+    <div class="modal-backdrop wiki-modal-backdrop">
+      <section class="modal-panel wiki-type-modal">
         <header class="modal-head">
           <div>
-            <h2>${pageId ? "Editar pagina" : "Nueva pagina"}</h2>
-            <p class="muted small">Marca como publica solo la informacion que puede leer la mesa.</p>
+            <span class="wiki-modal-kicker">NUEVA FICHA</span>
+            <h2>Elegí un tipo</h2>
+            <p class="muted small">Cada tipo incluye propiedades propias. Podés cambiarlo más adelante.</p>
           </div>
-          <button class="button ghost" data-action="close-modal"><span class="icon">x</span></button>
+          <button class="button ghost" data-action="close-modal" aria-label="Cerrar">×</button>
         </header>
-        <form class="form-grid" data-form="wiki">
-          <label class="field">
-            <span>Titulo</span>
-            <input class="input" name="title" value="${escapeAttr(page.title)}" required />
-          </label>
-          <label class="field">
-            <span>Categoria</span>
-            <input class="input" name="category" value="${escapeAttr(page.category)}" required />
-          </label>
-          <label class="field">
-            <span>Contenido</span>
-            <textarea class="textarea" name="content" required>${escapeHtml(page.content)}</textarea>
-          </label>
-          <label class="field">
-            <span>Visibilidad</span>
-            <select class="select" name="isPublic">
-              <option value="true" ${page.isPublic ? "selected" : ""}>Publica en la wiki</option>
-              <option value="false" ${!page.isPublic ? "selected" : ""}>Privada de owner/editor</option>
-            </select>
-          </label>
-          <button class="button primary" type="submit"><span class="icon">S</span>Guardar pagina</button>
+        <label class="wiki-type-search"><span>⌕</span><input data-wiki-type-search type="search" placeholder="Buscar tipos..." aria-label="Buscar tipos" /></label>
+        <div class="wiki-type-grid">
+          ${Object.entries(WIKI_CARD_TYPES).map(([key, type]) => `<button class="wiki-type-card" data-action="choose-wiki-type" data-wiki-type="${key}" data-type-label="${escapeAttr(type.label)}">
+            <span>${type.icon}</span><strong>${type.label}</strong><small>${type.description}</small>
+          </button>`).join("")}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderWikiModal(pageId) {
+  const campaign = campaignById(activeCampaignId);
+  const existingPage = campaign.wiki.find((item) => item.id === pageId);
+  const page = existingPage ? wikiCardsFor({ wiki: [existingPage] })[0] : {
+    title: "",
+    type: editing.wikiType || "nota",
+    description: "",
+    aliases: [],
+    folder: WIKI_CARD_TYPES[editing.wikiType || "nota"].label,
+    properties: {},
+    relations: [],
+    imageUrl: "",
+    isPublic: true,
+  };
+  const type = wikiType(page);
+  const folders = [...new Set(wikiCardsFor(campaign).map((card) => card.folder).filter(Boolean))];
+  const relatedNames = wikiCardsFor(campaign)
+    .filter((card) => page.relations.includes(card.id))
+    .map((card) => card.title)
+    .join(", ");
+
+  return `
+    <div class="modal-backdrop wiki-modal-backdrop">
+      <section class="modal-panel wiki-editor-modal">
+        <header class="modal-head">
+          <div>
+            <span class="wiki-modal-kicker">${type.icon} ${type.label.toUpperCase()}</span>
+            <h2>${pageId ? "Editar ficha" : `Nueva ficha de ${type.label.toLowerCase()}`}</h2>
+            <p class="muted small">Los nombres y alias mencionados generarán conexiones en el mapa.</p>
+          </div>
+          <button class="button ghost" data-action="close-modal" aria-label="Cerrar">×</button>
+        </header>
+        <form class="form-grid wiki-card-form" data-form="wiki">
+          <input type="hidden" name="type" value="${page.type}" />
+          <div class="wiki-form-columns">
+            <div class="wiki-form-main">
+              <label class="field">
+                <span>Nombre de la ficha</span>
+                <input class="input wiki-title-input" name="title" value="${escapeAttr(page.title)}" placeholder="Ej: Aureon el Radiante" required />
+              </label>
+              <label class="field">
+                <span>Aliases <small>separados por comas</small></span>
+                <input class="input" name="aliases" value="${escapeAttr(page.aliases.join(", "))}" placeholder="Ej: El Monarca Luminar, Aureon" />
+              </label>
+              <div class="wiki-form-pair">
+                <label class="field">
+                  <span>Carpeta</span>
+                  <input class="input" name="folder" list="wiki-folder-options" value="${escapeAttr(page.folder)}" placeholder="Ej: Personajes/Realeza" />
+                  <datalist id="wiki-folder-options">${folders.map((folder) => `<option value="${escapeAttr(folder)}"></option>`).join("")}</datalist>
+                </label>
+                <label class="field">
+                  <span>Visibilidad</span>
+                  <select class="select" name="isPublic">
+                    <option value="true" ${page.isPublic ? "selected" : ""}>Pública</option>
+                    <option value="false" ${!page.isPublic ? "selected" : ""}>Privada</option>
+                  </select>
+                </label>
+              </div>
+              <div class="wiki-dynamic-fields">
+                ${type.fields.map(([label, key, placeholder]) => `<label class="field"><span>${label}</span><input class="input" name="property_${key}" value="${escapeAttr(page.properties[key] || "")}" placeholder="${escapeAttr(placeholder)}" /></label>`).join("")}
+              </div>
+              <label class="field">
+                <span>Descripción</span>
+                <textarea class="textarea wiki-description-input" name="description" placeholder="Contá qué lugar ocupa esta ficha en el mundo..." required>${escapeHtml(page.description)}</textarea>
+              </label>
+              <label class="field">
+                <span>Relaciones manuales <small>opcional, por nombre y separadas por comas</small></span>
+                <input class="input" name="relationNames" value="${escapeAttr(relatedNames)}" placeholder="Ej: Luminar, Daga del olvido" />
+              </label>
+            </div>
+            <aside class="wiki-image-fields">
+              <div class="wiki-image-preview">
+                ${page.imageUrl ? `<img src="${escapeAttr(page.imageUrl)}" alt="Vista previa" />` : `<span>${type.icon}</span><small>Imagen de la ficha</small>`}
+              </div>
+              <label class="field"><span>Subir imagen</span><input class="input" name="imageFile" type="file" accept="image/*" /></label>
+              <label class="field"><span>o usar una URL</span><input class="input" name="imageUrl" type="url" value="${escapeAttr(page.imageUrl)}" placeholder="https://..." /></label>
+              <input type="hidden" name="existingImageUrl" value="${escapeAttr(page.imageUrl)}" />
+              ${page.imageUrl ? `<label class="check-field"><input type="checkbox" name="removeImage" />Quitar imagen</label>` : ""}
+            </aside>
+          </div>
+          <div class="wiki-form-footer">
+            <button class="button" type="button" data-action="${pageId ? "close-modal" : "back-to-wiki-types"}">${pageId ? "Cancelar" : "← Cambiar tipo"}</button>
+            <button class="button primary" type="submit"><span class="icon">✓</span>Guardar ficha</button>
+          </div>
         </form>
       </section>
     </div>
@@ -1380,11 +1801,15 @@ document.addEventListener("submit", async (event) => {
   }
 
   if (formType === "wiki") {
+    const imageUrl = await wikiImageFromData(data);
+    if (imageUrl === null) return;
+    data.imageUrl = imageUrl;
     saveWikiPage(data);
     editing = null;
+    wikiView = "cards";
     saveState();
     render();
-    showToast("Pagina guardada.");
+    showToast("Ficha guardada.");
     return;
   }
 
@@ -1500,6 +1925,10 @@ document.addEventListener("click", async (event) => {
   if (action === "open-campaign") {
     activeCampaignId = id;
     activeTab = "wiki";
+    wikiView = "home";
+    selectedWikiCardId = null;
+    wikiSearch = "";
+    wikiFolder = "all";
     setHash(`campaign=${id}`);
   }
 
@@ -1514,7 +1943,34 @@ document.addEventListener("click", async (event) => {
   }
 
   if (action === "new-wiki-page") {
-    editing = { type: "wiki", id: null };
+    editing = { type: "wiki-type" };
+    render();
+  }
+
+  if (action === "choose-wiki-type") {
+    editing = { type: "wiki", id: null, wikiType: target.dataset.wikiType };
+    render();
+  }
+
+  if (action === "back-to-wiki-types") {
+    editing = { type: "wiki-type" };
+    render();
+  }
+
+  if (action === "set-wiki-view") {
+    wikiView = target.dataset.view === "cards" ? "cards" : "home";
+    render();
+  }
+
+  if (action === "select-wiki-card") {
+    selectedWikiCardId = id;
+    wikiView = "cards";
+    render();
+  }
+
+  if (action === "filter-wiki-folder") {
+    wikiFolder = target.dataset.folder || "all";
+    selectedWikiCardId = null;
     render();
   }
 
@@ -1563,6 +2019,11 @@ document.addEventListener("click", async (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && editing) {
+    editing = null;
+    render();
+    return;
+  }
   const input = event.target.closest("[data-tag-input]");
   if (!input) return;
 
@@ -1572,11 +2033,43 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+document.addEventListener("change", (event) => {
+  const fileInput = event.target.closest('.wiki-card-form input[name="imageFile"]');
+  const file = fileInput?.files?.[0];
+  const preview = fileInput?.closest(".wiki-image-fields")?.querySelector(".wiki-image-preview");
+  if (!file || !preview || !file.type.startsWith("image/")) return;
+  const reader = new FileReader();
+  reader.addEventListener("load", () => {
+    preview.innerHTML = `<img src="${escapeAttr(String(reader.result || ""))}" alt="Vista previa" />`;
+  });
+  reader.readAsDataURL(file);
+});
+
 document.addEventListener("input", (event) => {
   const dashboardInput = event.target.closest("[data-dashboard-search]");
   if (dashboardInput) {
     dashboardSearch = dashboardInput.value;
     refreshDashboardResults();
+    return;
+  }
+
+  const wikiInput = event.target.closest("[data-wiki-search]");
+  if (wikiInput) {
+    wikiSearch = wikiInput.value;
+    const selectionStart = wikiInput.selectionStart;
+    render();
+    const nextInput = document.querySelector("[data-wiki-search]");
+    nextInput?.focus();
+    nextInput?.setSelectionRange(selectionStart, selectionStart);
+    return;
+  }
+
+  const typeInput = event.target.closest("[data-wiki-type-search]");
+  if (typeInput) {
+    const query = normalizeSearchText(typeInput.value);
+    document.querySelectorAll(".wiki-type-card").forEach((card) => {
+      card.classList.toggle("hidden", !normalizeSearchText(card.dataset.typeLabel).includes(query));
+    });
     return;
   }
 
@@ -1793,6 +2286,28 @@ function readFileAsDataUrl(file) {
   });
 }
 
+async function wikiImageFromData(data) {
+  if (data.removeImage) return "";
+  const file = data.imageFile;
+  if (file instanceof File && file.size > 0) {
+    if (!file.type.startsWith("image/")) {
+      showToast("Elegí un archivo de imagen.");
+      return null;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      showToast("La imagen debe pesar menos de 4 MB.");
+      return null;
+    }
+    try {
+      return await readFileAsDataUrl(file);
+    } catch {
+      showToast("No se pudo leer la imagen.");
+      return null;
+    }
+  }
+  return String(data.imageUrl || data.existingImageUrl || "").trim();
+}
+
 function createCampaign(data) {
   const campaign = {
     id: uid("camp"),
@@ -1810,10 +2325,19 @@ function createCampaign(data) {
     wiki: [
       {
         id: uid("wiki"),
-        title: "Resumen de la campana",
-        category: "Inicio",
+        title: "Resumen de la campaña",
+        type: "mundo",
+        category: "Mundo",
+        aliases: [],
+        folder: "Mundo",
+        properties: { tone: formatTags(splitTags(data.tags)) },
+        description: data.description.trim(),
         isPublic: true,
         content: data.description.trim(),
+        relations: [],
+        imageUrl: String(data.imageUrl || "").trim(),
+        createdAt: Date.now(),
+        modifiedAt: Date.now(),
       },
     ],
     characters: [],
@@ -1827,17 +2351,40 @@ function createCampaign(data) {
 function saveWikiPage(data) {
   const campaign = campaignById(activeCampaignId);
   const existing = editing.id ? campaign.wiki.find((page) => page.id === editing.id) : null;
+  const type = WIKI_CARD_TYPES[data.type] ? data.type : "nota";
+  const properties = {};
+  for (const [, key] of WIKI_CARD_TYPES[type].fields) {
+    const value = String(data[`property_${key}`] || "").trim();
+    if (value) properties[key] = value;
+  }
+  const relationNames = splitTags(data.relationNames || "");
+  const relationIds = wikiCardsFor(campaign)
+    .filter((card) => relationNames.some((name) =>
+      [card.title, ...(card.aliases || [])].some((candidate) => normalizeSearchText(name) === normalizeSearchText(candidate))
+    ))
+    .map((card) => card.id);
   const payload = {
     title: data.title.trim(),
-    category: data.category.trim(),
-    content: data.content.trim(),
+    type,
+    category: WIKI_CARD_TYPES[type].label,
+    aliases: splitTags(data.aliases || ""),
+    folder: String(data.folder || WIKI_CARD_TYPES[type].label).trim(),
+    properties,
+    description: data.description.trim(),
+    content: data.description.trim(),
+    imageUrl: String(data.imageUrl || "").trim(),
+    relations: relationIds,
     isPublic: data.isPublic === "true",
+    modifiedAt: Date.now(),
   };
 
   if (existing) {
     Object.assign(existing, payload);
+    selectedWikiCardId = existing.id;
   } else {
-    campaign.wiki.unshift({ id: uid("wiki"), ...payload });
+    const id = uid("wiki");
+    campaign.wiki.unshift({ id, createdAt: Date.now(), ...payload });
+    selectedWikiCardId = id;
   }
 }
 
@@ -1881,9 +2428,10 @@ function saveSettings(data) {
 function deleteWikiPage(id) {
   const campaign = campaignById(activeCampaignId);
   campaign.wiki = campaign.wiki.filter((page) => page.id !== id);
+  if (selectedWikiCardId === id) selectedWikiCardId = campaign.wiki[0]?.id || null;
   saveState();
   render();
-  showToast("Pagina borrada.");
+  showToast("Ficha borrada.");
 }
 
 function deleteCharacter(id) {

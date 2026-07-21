@@ -55,6 +55,9 @@ Mientras todos usen el mismo proyecto de Supabase, las cuentas, campanas, invita
 - Crear campanas de rol.
 - Elegir sistema desde un desplegable y agregar tags con sugerencias.
 - Editar wiki privada/publica por campana.
+- Crear fichas tipadas para personajes, ecologia, reinos, mapas, fauna, flora, objetos, ubicaciones, trasfondo, mundo y notas libres.
+- Ordenar fichas en carpetas, buscarlas e inspeccionar propiedades, aliases, imagenes y relaciones.
+- Generar un mapa de nodos automaticamente cuando una ficha menciona el nombre o alias de otra.
 - Generar link publico de wiki.
 - Generar invitaciones para jugadores por correo o por link.
 - Recomendar jugadores que ya participaron en campanas creadas por vos.
