@@ -115,11 +115,9 @@ function renderTagPicker(tags = []) {
       <div class="tag-chip-row" data-tag-chips>${renderTagChips(cleanTags)}</div>
       <label class="field">
         <span>Agregar tag</span>
-        <input class="input" data-tag-input list="campaign-tag-suggestions" placeholder="Escribi y elegi una sugerencia" />
+        <input class="input" data-tag-input autocomplete="off" placeholder="Escribi y elegi una sugerencia" />
       </label>
-      <datalist id="campaign-tag-suggestions">
-        ${PRESET_CAMPAIGN_TAGS.map((tag) => `<option value="${escapeAttr(tag)}"></option>`).join("")}
-      </datalist>
+      <div class="tag-suggestions hidden" data-tag-suggestions></div>
       <div class="tag-preset-row">
         ${PRESET_CAMPAIGN_TAGS.slice(0, 10)
           .map((tag) => `<button class="tag-preset" type="button" data-action="add-tag" data-tag="${escapeAttr(tag)}">${escapeHtml(tag)}</button>`)
@@ -133,6 +131,7 @@ function updateTagPicker(picker, tags) {
   const cleanTags = splitTags(tags.join(","));
   picker.querySelector('input[name="tags"]').value = cleanTags.join(",");
   picker.querySelector("[data-tag-chips]").innerHTML = renderTagChips(cleanTags);
+  refreshTagSuggestions(picker.querySelector("[data-tag-input]"));
 }
 
 function addTagFromPicker(input) {
@@ -142,6 +141,32 @@ function addTagFromPicker(input) {
   if (!picker || !hidden || !value) return;
   updateTagPicker(picker, [...splitTags(hidden.value), value]);
   input.value = "";
+  hideTagSuggestions(picker);
+}
+
+function tagSuggestionsFor(picker, query = "") {
+  const selected = new Set(splitTags(picker.querySelector('input[name="tags"]')?.value).map((tag) => tag.toLowerCase()));
+  const normalizedQuery = query.trim().toLowerCase();
+  return PRESET_CAMPAIGN_TAGS.filter((tag) => {
+    if (selected.has(tag.toLowerCase())) return false;
+    return !normalizedQuery || tag.toLowerCase().includes(normalizedQuery);
+  });
+}
+
+function refreshTagSuggestions(input) {
+  const picker = input?.closest("[data-tag-picker]");
+  const panel = picker?.querySelector("[data-tag-suggestions]");
+  if (!picker || !panel || document.activeElement !== input) return;
+
+  const suggestions = tagSuggestionsFor(picker, input.value);
+  panel.innerHTML = suggestions
+    .map((tag) => `<button type="button" data-action="add-suggested-tag" data-tag="${escapeAttr(tag)}">${escapeHtml(tag)}</button>`)
+    .join("");
+  panel.classList.toggle("hidden", suggestions.length === 0);
+}
+
+function hideTagSuggestions(picker) {
+  picker?.querySelector("[data-tag-suggestions]")?.classList.add("hidden");
 }
 
 function renderDisplayTags(tags) {
@@ -856,7 +881,7 @@ function renderSettingsTab(campaign, canManage) {
               ${renderTagPicker(campaignTags(campaign))}
               <label class="field">
                 <span>Descripcion</span>
-                <textarea class="textarea" name="description" required>${escapeHtml(campaign.description)}</textarea>
+                <textarea class="textarea" name="description">${escapeHtml(campaign.description)}</textarea>
               </label>
               <label class="field">
                 <span>Estado de la wiki</span>
@@ -1068,7 +1093,7 @@ function renderCampaignModal() {
           ${renderTagPicker(["Fantasia oscura"])}
           <label class="field">
             <span>Descripcion</span>
-            <textarea class="textarea" name="description" required></textarea>
+            <textarea class="textarea" name="description" placeholder="Opcional"></textarea>
           </label>
           <button class="button primary" type="submit"><span class="icon">+</span>Crear campana</button>
         </form>
@@ -1335,6 +1360,17 @@ document.addEventListener("click", async (event) => {
     }
   }
 
+  if (action === "add-suggested-tag") {
+    const picker = target.closest("[data-tag-picker]");
+    const hidden = picker?.querySelector('input[name="tags"]');
+    const input = picker?.querySelector("[data-tag-input]");
+    if (picker && hidden) {
+      updateTagPicker(picker, [...splitTags(hidden.value), target.dataset.tag]);
+      if (input) input.value = "";
+      hideTagSuggestions(picker);
+    }
+  }
+
   if (action === "fill-invite-email") {
     const input = document.querySelector('form[data-form="invite-email"] input[name="email"]');
     if (input) {
@@ -1428,10 +1464,21 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-document.addEventListener("change", (event) => {
+document.addEventListener("input", (event) => {
   const input = event.target.closest("[data-tag-input]");
   if (!input) return;
-  addTagFromPicker(input);
+  refreshTagSuggestions(input);
+});
+
+document.addEventListener("focusin", (event) => {
+  const input = event.target.closest("[data-tag-input]");
+  if (!input) return;
+  refreshTagSuggestions(input);
+});
+
+document.addEventListener("click", (event) => {
+  if (event.target.closest("[data-tag-picker]")) return;
+  document.querySelectorAll("[data-tag-picker]").forEach(hideTagSuggestions);
 });
 
 window.addEventListener("hashchange", render);
