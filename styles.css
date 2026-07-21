@@ -699,21 +699,64 @@ p {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.campaign-title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
 .campaign-card h3 {
-  margin-bottom: 5px;
+  min-width: 0;
+  margin-bottom: 0;
   font-family: var(--serif);
   font-size: 28px;
   font-weight: 500;
 }
 
-.campaign-role {
-  display: block;
-  margin-bottom: 10px;
+.campaign-system {
+  max-width: 112px;
+  overflow: hidden;
   color: var(--gold-strong);
   font-family: var(--mono);
   font-size: 12px;
   font-weight: 800;
+  text-align: right;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.campaign-hover-info {
+  display: grid;
+  gap: 9px;
+  min-height: 0;
+  margin-bottom: 0;
+  color: var(--gold-strong);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 160ms ease, transform 160ms ease, margin-bottom 160ms ease;
+  text-transform: uppercase;
+}
+
+.campaign-card:hover .campaign-hover-info,
+.campaign-card:focus-visible .campaign-hover-info {
+  margin-bottom: 10px;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.campaign-card:hover .campaign-system,
+.campaign-card:focus-visible .campaign-system {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .campaign-card p {
@@ -740,6 +783,8 @@ p {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  font-family: var(--sans);
+  text-transform: none;
 }
 
 .empty-state {
