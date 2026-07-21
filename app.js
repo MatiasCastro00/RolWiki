@@ -55,6 +55,7 @@ let activeTab = "wiki";
 let editing = null;
 let activeCampaignId = null;
 let stateSaveTimer = null;
+let dashboardSearch = "";
 
 function uid(prefix) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}-${Date.now().toString(36)}`;
@@ -173,6 +174,70 @@ function renderDisplayTags(tags) {
   return tags.length
     ? `<div class="display-tags">${tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div>`
     : "";
+}
+
+function campaignsForCurrentUser() {
+  const user = currentUser();
+  if (!user) return [];
+  return state.campaigns.filter((campaign) =>
+    campaign.members.some((member) => member.userId === user.id)
+  );
+}
+
+function normalizeSearchText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function campaignMatchesSearch(campaign, query) {
+  const normalizedQuery = normalizeSearchText(query).trim();
+  if (!normalizedQuery) return true;
+  const searchable = [
+    campaign.title,
+    ...campaignTags(campaign),
+  ].map(normalizeSearchText);
+  return searchable.some((value) => value.includes(normalizedQuery));
+}
+
+function filteredDashboardCampaigns(campaigns) {
+  return campaigns.filter((campaign) => campaignMatchesSearch(campaign, dashboardSearch));
+}
+
+function renderDashboardResults(campaigns, totalCount = campaigns.length) {
+  if (!totalCount) {
+    return `<section class="empty-state">
+      <div>
+        <h2>Todavia no hay campanas</h2>
+        <p class="muted">Crea la primera y usa el link de invitacion para sumar jugadores.</p>
+        <button class="button primary" data-action="new-campaign"><span class="icon">+</span>Crear campana</button>
+      </div>
+    </section>`;
+  }
+
+  if (!campaigns.length) {
+    return `<section class="empty-state compact">
+      <div>
+        <h2>No hay coincidencias</h2>
+        <p class="muted">Proba buscar por nombre de campana o por alguno de sus tags.</p>
+      </div>
+    </section>`;
+  }
+
+  return `<section class="dashboard-grid">${campaigns.map(renderCampaignCard).join("")}</section>`;
+}
+
+function refreshDashboardResults() {
+  const results = document.querySelector("[data-dashboard-results]");
+  if (!results) return;
+  const campaigns = campaignsForCurrentUser();
+  const filtered = filteredDashboardCampaigns(campaigns);
+  results.innerHTML = renderDashboardResults(filtered, campaigns.length);
+  const count = document.querySelector("[data-dashboard-count]");
+  if (count) {
+    count.textContent = `${filtered.length} de ${campaigns.length} campanas`;
+  }
 }
 
 function inviteSuggestionsFor(campaign) {
@@ -509,10 +574,8 @@ function renderSocialAuth() {
 }
 
 function renderDashboard() {
-  const user = currentUser();
-  const campaigns = state.campaigns.filter((campaign) =>
-    campaign.members.some((member) => member.userId === user.id)
-  );
+  const campaigns = campaignsForCurrentUser();
+  const filteredCampaigns = filteredDashboardCampaigns(campaigns);
 
   return `
     <main class="page">
@@ -525,29 +588,42 @@ function renderDashboard() {
         <button class="button primary" data-action="new-campaign"><span class="icon">+</span>Nueva campana</button>
       </section>
 
-      ${
-        campaigns.length
-          ? `<section class="dashboard-grid">${campaigns.map(renderCampaignCard).join("")}</section>`
-          : `<section class="empty-state">
-              <div>
-                <h2>Todavia no hay campanas</h2>
-                <p class="muted">Crea la primera y usa el link de invitacion para sumar jugadores.</p>
-                <button class="button primary" data-action="new-campaign"><span class="icon">+</span>Crear campana</button>
-              </div>
-            </section>`
-      }
+      ${campaigns.length ? `
+        <section class="dashboard-tools" aria-label="Buscar campanas">
+          <label class="search-field">
+            <span class="icon">B</span>
+            <input
+              class="input"
+              data-dashboard-search
+              type="search"
+              value="${escapeAttr(dashboardSearch)}"
+              placeholder="Buscar por nombre o tag"
+              aria-label="Buscar por nombre o tag"
+            />
+          </label>
+          <span class="muted small" data-dashboard-count>${filteredCampaigns.length} de ${campaigns.length} campanas</span>
+        </section>
+      ` : ""}
+
+      <div data-dashboard-results>
+        ${renderDashboardResults(filteredCampaigns, campaigns.length)}
+      </div>
     </main>
   `;
 }
 
 function renderCampaignCard(campaign) {
-  const role = roleFor(campaign, currentUser().id);
+  const role = displayRoleFor(campaign, currentUser().id);
   const tags = campaignTags(campaign);
+  const image = campaign.imageUrl
+    ? `<img class="campaign-card-image" src="${escapeAttr(campaign.imageUrl)}" alt="" loading="lazy" />`
+    : "";
   return `
     <button class="campaign-card" data-action="open-campaign" data-id="${campaign.id}">
+      ${image}
       <div class="campaign-meta">
         <span class="tag gold">${escapeHtml(campaign.system)}</span>
-        <span class="tag">${escapeHtml(roleLabel(role))}</span>
+        <span class="tag role">Tu rol: ${escapeHtml(roleLabel(role))}</span>
         <span class="tag green">${campaign.visibility === "public" ? "Wiki publica" : "Wiki privada"}</span>
         ${tags.slice(0, 2).map((tag) => `<span class="tag violet">${escapeHtml(tag)}</span>`).join("")}
       </div>
@@ -566,8 +642,8 @@ function renderCampaignCard(campaign) {
 
 function renderCampaign() {
   const campaign = campaignById(activeCampaignId);
-  const role = roleFor(campaign, currentUser().id);
-  const canManage = role === "master";
+  const role = displayRoleFor(campaign, currentUser().id);
+  const canManage = canManageCampaign(campaign, currentUser().id);
   const tags = campaignTags(campaign);
 
   return `
@@ -699,7 +775,7 @@ function renderCharactersTab(campaign, role, canManage) {
         <div class="section-head">
           <div>
             <h2>Personajes</h2>
-            <p>${canManage ? "El master puede revisar todos los personajes." : "Podes editar tus propios personajes."}</p>
+            <p>${canManage ? "Owner y editor pueden revisar todos los personajes." : "Podes editar tus propios personajes."}</p>
           </div>
           <button class="button primary" data-action="new-character"><span class="icon">+</span>Nuevo personaje</button>
         </div>
@@ -758,20 +834,20 @@ function renderMembersTab(campaign) {
       <section class="panel tool-panel">
         <h2>Jugadores y permisos</h2>
         <div class="members-list">
-          ${campaign.members.map((member) => renderMemberRow(member)).join("")}
+          ${campaign.members.map((member) => renderMemberRow(member, campaign)).join("")}
         </div>
       </section>
       <aside class="panel tool-panel">
         <h2>Roles</h2>
         <p class="muted small">
-          Master puede editar todo. Jugador puede ver la campana y editar sus personajes. La wiki publica se comparte aparte.
+          Owner y editor pueden editar todo. Player puede ver la campana y editar sus personajes. Viewer queda como lectura.
         </p>
       </aside>
     </div>
   `;
 }
 
-function renderMemberRow(member) {
+function renderMemberRow(member, campaign) {
   const user = state.users.find((item) => item.id === member.userId);
   return `
     <div class="member-row">
@@ -782,7 +858,7 @@ function renderMemberRow(member) {
           <span>${escapeHtml(user?.email || "sin email")}</span>
         </span>
       </div>
-      <span class="tag gold">${escapeHtml(roleLabel(member.role))}</span>
+      <span class="tag gold">${escapeHtml(roleLabel(displayRoleFor(campaign, member.userId)))}</span>
     </div>
   `;
 }
@@ -826,7 +902,7 @@ function renderInvitesTab(campaign, canManage) {
                    <button class="button" type="button" data-action="new-invite"><span class="icon">#</span>Link sin correo</button>
                  </div>
                </form>`
-            : `<p class="muted small">Solo el master puede generar invitaciones.</p>`
+            : `<p class="muted small">Solo owner o editor pueden generar invitaciones.</p>`
         }
         <div class="list" style="margin-top: 16px;">
           ${
@@ -884,6 +960,21 @@ function renderSettingsTab(campaign, canManage) {
                 <textarea class="textarea" name="description">${escapeHtml(campaign.description)}</textarea>
               </label>
               <label class="field">
+                <span>URL de imagen del tablero</span>
+                <input class="input" name="imageUrl" type="url" value="${escapeAttr(campaign.imageUrl?.startsWith("data:") ? "" : campaign.imageUrl || "")}" placeholder="https://..." />
+              </label>
+              ${campaign.imageUrl?.startsWith("data:") ? `<input type="hidden" name="existingImageUrl" value="${escapeAttr(campaign.imageUrl)}" />` : ""}
+              <label class="field">
+                <span>Subir imagen del tablero</span>
+                <input class="input" name="imageFile" type="file" accept="image/*" />
+              </label>
+              ${campaign.imageUrl ? `
+                <label class="check-field">
+                  <input name="removeImage" type="checkbox" />
+                  <span>Quitar imagen guardada</span>
+                </label>
+              ` : ""}
+              <label class="field">
                 <span>Estado de la wiki</span>
                 <select class="select" name="visibility">
                   <option value="private" ${campaign.visibility === "private" ? "selected" : ""}>Privada por defecto</option>
@@ -892,7 +983,7 @@ function renderSettingsTab(campaign, canManage) {
               </label>
               <button class="button primary" type="submit"><span class="icon">S</span>Guardar cambios</button>
             </form>`
-          : `<p class="muted">Solo el master puede cambiar los ajustes de esta campana.</p>`
+          : `<p class="muted">Solo owner o editor pueden cambiar los ajustes de esta campana.</p>`
       }
     </section>
   `;
@@ -931,7 +1022,7 @@ function renderPublicWiki(campaignId) {
                 ${
                   pages.length
                     ? pages.map(renderPublicPage).join("")
-                    : `<article class="public-page"><h2>Wiki sin paginas publicas</h2><div>El master todavia no publico contenido.</div></article>`
+                    : `<article class="public-page"><h2>Wiki sin paginas publicas</h2><div>Todavia no se publico contenido.</div></article>`
                 }
               </section>`
             : needsAuth
@@ -1095,6 +1186,14 @@ function renderCampaignModal() {
             <span>Descripcion</span>
             <textarea class="textarea" name="description" placeholder="Opcional"></textarea>
           </label>
+          <label class="field">
+            <span>URL de imagen del tablero</span>
+            <input class="input" name="imageUrl" type="url" placeholder="https://..." />
+          </label>
+          <label class="field">
+            <span>Subir imagen del tablero</span>
+            <input class="input" name="imageFile" type="file" accept="image/*" />
+          </label>
           <button class="button primary" type="submit"><span class="icon">+</span>Crear campana</button>
         </form>
       </section>
@@ -1138,7 +1237,7 @@ function renderWikiModal(pageId) {
             <span>Visibilidad</span>
             <select class="select" name="isPublic">
               <option value="true" ${page.isPublic ? "selected" : ""}>Publica en la wiki</option>
-              <option value="false" ${!page.isPublic ? "selected" : ""}>Privada del master</option>
+              <option value="false" ${!page.isPublic ? "selected" : ""}>Privada de owner/editor</option>
             </select>
           </label>
           <button class="button primary" type="submit"><span class="icon">S</span>Guardar pagina</button>
@@ -1159,7 +1258,7 @@ function renderCharacterModal(characterId) {
     status: "Activa",
     notes: "",
   };
-  const canManage = roleFor(campaign, currentUser().id) === "master";
+  const canManage = canManageCampaign(campaign, currentUser().id);
 
   return `
     <div class="modal-backdrop">
@@ -1167,7 +1266,7 @@ function renderCharacterModal(characterId) {
         <header class="modal-head">
           <div>
             <h2>${characterId ? "Editar personaje" : "Nuevo personaje"}</h2>
-            <p class="muted small">Ficha narrativa editable por su jugador o por el master.</p>
+            <p class="muted small">Ficha narrativa editable por su jugador o por owner/editor.</p>
           </div>
           <button class="button ghost" data-action="close-modal"><span class="icon">x</span></button>
         </header>
@@ -1265,6 +1364,9 @@ document.addEventListener("submit", async (event) => {
   }
 
   if (formType === "campaign") {
+    const imageUrl = await campaignImageFromData(data);
+    if (imageUrl === null) return;
+    data.imageUrl = imageUrl;
     createCampaign(data);
     editing = null;
     saveState();
@@ -1293,6 +1395,9 @@ document.addEventListener("submit", async (event) => {
   }
 
   if (formType === "settings") {
+    const imageUrl = await campaignImageFromData(data);
+    if (imageUrl === null) return;
+    data.imageUrl = imageUrl;
     saveSettings(data);
     saveState();
     render();
@@ -1465,6 +1570,13 @@ document.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("input", (event) => {
+  const dashboardInput = event.target.closest("[data-dashboard-search]");
+  if (dashboardInput) {
+    dashboardSearch = dashboardInput.value;
+    refreshDashboardResults();
+    return;
+  }
+
   const input = event.target.closest("[data-tag-input]");
   if (!input) return;
   refreshTagSuggestions(input);
@@ -1649,6 +1761,35 @@ function updateLocalCharacterNames(userId, name) {
   }
 }
 
+async function campaignImageFromData(data) {
+  if (data.removeImage) return "";
+
+  const file = data.imageFile;
+  if (file instanceof File && file.size > 0) {
+    if (!file.type.startsWith("image/")) {
+      showToast("Elegi un archivo de imagen.");
+      return null;
+    }
+    try {
+      return await readFileAsDataUrl(file);
+    } catch {
+      showToast("No se pudo leer la imagen.");
+      return null;
+    }
+  }
+
+  return String(data.imageUrl || data.existingImageUrl || "").trim();
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(String(reader.result || "")));
+    reader.addEventListener("error", () => reject(reader.error));
+    reader.readAsDataURL(file);
+  });
+}
+
 function createCampaign(data) {
   const campaign = {
     id: uid("camp"),
@@ -1658,6 +1799,7 @@ function createCampaign(data) {
     tags: splitTags(data.tags),
     tone: formatTags(splitTags(data.tags)),
     description: data.description.trim(),
+    imageUrl: String(data.imageUrl || "").trim(),
     visibility: "private",
     createdAt: Date.now(),
     members: [{ userId: currentUser().id, role: "master" }],
@@ -1699,7 +1841,7 @@ function saveWikiPage(data) {
 function saveCharacter(data) {
   const campaign = campaignById(activeCampaignId);
   const existing = editing.id ? campaign.characters.find((character) => character.id === editing.id) : null;
-  const canManage = roleFor(campaign, currentUser().id) === "master";
+  const canManage = canManageCampaign(campaign, currentUser().id);
   const ownerId = canManage ? data.ownerId : existing?.ownerId || currentUser().id;
   const owner = state.users.find((user) => user.id === ownerId);
   const payload = {
@@ -1728,6 +1870,7 @@ function saveSettings(data) {
     tags: splitTags(data.tags),
     tone: formatTags(splitTags(data.tags)),
     description: data.description.trim(),
+    imageUrl: String(data.imageUrl || "").trim(),
     visibility: data.visibility,
   });
 }
@@ -1805,15 +1948,30 @@ function roleFor(campaign, userId) {
   return campaign.members.find((member) => member.userId === userId)?.role || "viewer";
 }
 
+function displayRoleFor(campaign, userId) {
+  if (campaign?.ownerId === userId) return "owner";
+  const role = roleFor(campaign, userId);
+  if (role === "master" || role === "editor") return "editor";
+  if (role === "player") return "player";
+  return "viewer";
+}
+
+function canManageCampaign(campaign, userId) {
+  const displayRole = displayRoleFor(campaign, userId);
+  return displayRole === "owner" || displayRole === "editor";
+}
+
 function isCampaignMember(campaign, userId) {
   return Boolean(campaign?.members.some((member) => member.userId === userId));
 }
 
 function roleLabel(role) {
   return {
-    master: "Master",
-    player: "Jugador",
-    viewer: "Lector",
+    owner: "Owner",
+    master: "Owner",
+    editor: "Editor",
+    player: "Player",
+    viewer: "Viewer",
   }[role] || role;
 }
 

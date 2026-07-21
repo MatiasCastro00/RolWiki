@@ -383,6 +383,15 @@ p {
   font-weight: 650;
 }
 
+.check-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--soft);
+  font-size: 13px;
+  font-weight: 650;
+}
+
 .input,
 .textarea,
 .select {
@@ -494,7 +503,35 @@ p {
   gap: 14px;
 }
 
+.dashboard-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.search-field {
+  position: relative;
+  width: min(520px, 100%);
+}
+
+.search-field .icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.search-field .input {
+  padding-left: 40px;
+}
+
 .campaign-card {
+  position: relative;
+  overflow: hidden;
   display: grid;
   min-height: 238px;
   padding: 20px;
@@ -505,6 +542,33 @@ p {
     rgba(17, 17, 21, 0.9);
   text-align: left;
   color: var(--text);
+}
+
+.campaign-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(90deg, rgba(17, 17, 21, 0.96) 0%, rgba(17, 17, 21, 0.78) 46%, rgba(17, 17, 21, 0.24) 100%);
+  pointer-events: none;
+}
+
+.campaign-card > *:not(.campaign-card-image) {
+  position: relative;
+  z-index: 2;
+}
+
+.campaign-card-image {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 0;
+  width: 72%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center right;
+  opacity: 0.78;
+  mask-image: linear-gradient(to left, #000 0%, #000 42%, transparent 84%);
+  -webkit-mask-image: linear-gradient(to left, #000 0%, #000 42%, transparent 84%);
 }
 
 .campaign-card:hover {
@@ -664,6 +728,10 @@ p {
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.025);
   text-align: center;
+}
+
+.empty-state.compact {
+  min-height: 240px;
 }
 
 .empty-state h2 {
@@ -1124,7 +1192,8 @@ p {
 @media (max-width: 680px) {
   .topbar,
   .workspace-hero,
-  .section-head {
+  .section-head,
+  .dashboard-tools {
     align-items: stretch;
     flex-direction: column;
   }
@@ -1132,6 +1201,7 @@ p {
   .topbar,
   .workspace-hero,
   .section-head,
+  .dashboard-tools,
   .copy-line {
     display: grid;
     grid-template-columns: 1fr;
