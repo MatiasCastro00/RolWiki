@@ -267,6 +267,7 @@ function renderAuth() {
         <p class="muted small">${subtitle}</p>
         ${renderAuthTabs()}
         ${isRegister ? renderRegisterForm("register", "Crear cuenta") : renderLoginForm("login", "Entrar al tablero")}
+        ${renderSocialAuth()}
         <div class="auth-note">
           <strong>Backend externo</strong>
           <span>Supabase guarda cuentas, sesiones y campanas.</span>
@@ -327,6 +328,16 @@ function renderRegisterForm(formType, buttonText, attributes = "") {
       </label>
       <button class="button primary" type="submit"><span class="icon">+</span>${buttonText}</button>
     </form>
+  `;
+}
+
+function renderSocialAuth() {
+  return `
+    <div class="auth-separator"><span>o</span></div>
+    <button class="button social-button" type="button" data-action="login-google">
+      <span class="google-mark">G</span>
+      Continuar con Google
+    </button>
   `;
 }
 
@@ -796,6 +807,7 @@ function renderInviteAuth(token) {
           ? renderRegisterForm("register-invite", "Crear cuenta y aceptar", `data-token="${escapeAttr(token)}"`)
           : renderLoginForm("login-invite", "Entrar y aceptar", `data-token="${escapeAttr(token)}"`)
       }
+      ${renderSocialAuth()}
       <p class="muted small">Usa la misma cuenta en cualquier dispositivo conectado a este proyecto de Supabase.</p>
     </div>
   `;
@@ -835,7 +847,7 @@ function renderAccountModal() {
           <div class="form-divider"></div>
           <label class="field">
             <span>Contrasena actual</span>
-            <input class="input" name="currentPassword" type="password" minlength="6" required />
+            <input class="input" name="currentPassword" type="password" minlength="6" placeholder="Solo si cambias email o contrasena" />
           </label>
           <label class="field">
             <span>Nueva contrasena</span>
@@ -845,7 +857,7 @@ function renderAccountModal() {
             <span>Repetir nueva contrasena</span>
             <input class="input" name="confirmPassword" type="password" minlength="6" placeholder="Opcional" />
           </label>
-          <p class="muted small">Este cambio solo afecta a los datos guardados en este navegador.</p>
+          <p class="muted small">Si entraste con Google, podes cambiar tu nombre sin contrasena. Para cambiar email o contrasena usa una cuenta con password.</p>
           <button class="button primary" type="submit"><span class="icon">S</span>Guardar cuenta</button>
         </form>
       </section>
@@ -1116,6 +1128,10 @@ document.addEventListener("click", async (event) => {
     render();
   }
 
+  if (action === "login-google") {
+    await loginWithGoogle();
+  }
+
   if (action === "open-account") {
     editing = { type: "account" };
     render();
@@ -1265,6 +1281,21 @@ async function registerUser(name, email, password, confirmPassword) {
   }
 }
 
+async function loginWithGoogle() {
+  try {
+    const { error } = await db.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: window.location.href,
+      },
+    });
+
+    if (error) throw error;
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
 async function saveAccount(data) {
   const cleanName = String(data.name || "").trim();
   const cleanEmail = normalizeEmail(data.email);
@@ -1287,19 +1318,28 @@ async function saveAccount(data) {
 
   try {
     const user = currentUser();
-    const { error: passwordError } = await db.auth.signInWithPassword({
-      email: user.email,
-      password: data.currentPassword,
-    });
+    const isChangingAuth = cleanEmail !== user.email || Boolean(newPassword);
 
-    if (passwordError) {
-      throw new Error("La contrasena actual no coincide.");
+    if (isChangingAuth) {
+      if (!data.currentPassword) {
+        throw new Error("Escribi tu contrasena actual para cambiar email o contrasena.");
+      }
+
+      const { error: passwordError } = await db.auth.signInWithPassword({
+        email: user.email,
+        password: data.currentPassword,
+      });
+
+      if (passwordError) {
+        throw new Error("La contrasena actual no coincide.");
+      }
+
+      const updates = {};
+      if (cleanEmail !== user.email) updates.email = cleanEmail;
+      if (newPassword) updates.password = newPassword;
+      const { error: authError } = await db.auth.updateUser(updates);
+      if (authError) throw authError;
     }
-
-    const updates = { email: cleanEmail };
-    if (newPassword) updates.password = newPassword;
-    const { error: authError } = await db.auth.updateUser(updates);
-    if (authError) throw authError;
 
     await upsertProfile(user.id, cleanName, cleanEmail);
     updateLocalCharacterNames(user.id, cleanName);

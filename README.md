@@ -15,6 +15,27 @@ La app esta preparada para Supabase: Auth guarda las cuentas y Postgres guarda e
 
 Para pruebas rapidas, en Authentication > Sign In / Providers podes desactivar la confirmacion por email. Si la dejas activa, el usuario tiene que confirmar el correo antes de entrar.
 
+## Login con Google
+
+1. En Supabase, entra a Authentication > Sign In / Providers > Google.
+2. Copia el Callback URL que muestra Supabase.
+3. En Google Cloud Console, crea un OAuth Client ID de tipo Web application.
+4. En Authorized JavaScript origins agrega la URL de GitHub Pages, por ejemplo:
+
+```text
+https://matiascastro00.github.io
+```
+
+5. En Authorized redirect URIs pega el Callback URL de Supabase.
+6. Copia el Client ID y Client Secret de Google.
+7. Pegalos en el provider de Google dentro de Supabase y activa el provider.
+8. En Supabase > Authentication > URL Configuration, verifica:
+
+```text
+Site URL: https://matiascastro00.github.io/RolWiki/
+Redirect URLs: https://matiascastro00.github.io/RolWiki/**
+```
+
 ## Como probar
 
 Abri `index.html` en el navegador despues de configurar Supabase.
@@ -28,6 +49,7 @@ Mientras todos usen el mismo proyecto de Supabase, las cuentas, campanas, invita
 ## Flujos incluidos
 
 - Crear cuentas con email y contrasena en Supabase Auth.
+- Entrar con Google.
 - Iniciar y cerrar sesion.
 - Editar nombre, email y contrasena desde el perfil.
 - Crear campanas de rol.
