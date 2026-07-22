@@ -1297,8 +1297,13 @@ function renderWikiGraph(cards, compact = false) {
       ${sorted.map((card, index) => {
         const position = positionById.get(card.id);
         const type = wikiType(card);
-        return `<button class="wiki-node ${index < 3 ? "featured" : ""}" style="left:${position.x}%;top:${position.y}%" data-action="select-wiki-card" data-id="${card.id}" data-node-id="${card.id}" data-x="${position.x}" data-y="${position.y}" title="Arrastrar o abrir ${escapeAttr(card.title)}">
-          <span class="wiki-node-icon">${type.icon}</span><span>${escapeHtml(card.title)}</span>
+        const imageUrl = String(card.imageUrl || "").trim();
+        const hasImage = Boolean(imageUrl);
+        const nodeVisual = hasImage
+          ? `<img class="wiki-node-image" src="${escapeAttr(imageUrl)}" alt="" loading="lazy" draggable="false" />`
+          : `<span class="wiki-node-icon">${type.icon}</span>`;
+        return `<button class="wiki-node ${hasImage ? "has-image" : ""} ${index < 3 ? "featured" : ""}" style="left:${position.x}%;top:${position.y}%" data-action="select-wiki-card" data-id="${card.id}" data-node-id="${card.id}" data-x="${position.x}" data-y="${position.y}" title="Arrastrar o abrir ${escapeAttr(card.title)}">
+          ${nodeVisual}<span class="wiki-node-name">${escapeHtml(card.title)}</span>
         </button>`;
       }).join("")}
       <div class="wiki-graph-legend"><span>${sorted.length} nodos</span><span>${edges.length} conexiones</span></div>
