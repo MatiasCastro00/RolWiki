@@ -1528,6 +1528,7 @@ p {
     linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
   background-size: 26px 26px;
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.28);
+  user-select: none;
 }
 
 .wiki-graph.compact {
@@ -1569,6 +1570,8 @@ p {
   color: #777f81;
   font-size: 9px;
   transform: translate(-50%, -50%);
+  cursor: grab;
+  touch-action: none;
   white-space: nowrap;
 }
 
@@ -1581,6 +1584,15 @@ p {
 .wiki-node.featured {
   background: #090b0d;
   color: #e8ecea;
+}
+
+.wiki-node.dragging {
+  z-index: 6;
+  border: 1px solid rgba(116, 208, 190, 0.32);
+  background: #090b0d;
+  color: #f4fffc;
+  cursor: grabbing;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.34);
 }
 
 .wiki-node.featured {

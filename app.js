@@ -172,6 +172,9 @@ let wikiView = "home";
 let selectedWikiCardId = null;
 let wikiSearch = "";
 let wikiFolder = "all";
+let wikiGraphRuntime = null;
+let wikiGraphClickSuppressedUntil = 0;
+const wikiGraphNodeMemory = new Map();
 
 function uid(prefix) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}-${Date.now().toString(36)}`;
@@ -520,6 +523,7 @@ function setHash(params) {
 }
 
 function render() {
+  teardownWikiGraphs();
   const route = getRoute();
 
   if (route.view === "wiki") {
@@ -576,6 +580,7 @@ function renderShell(content) {
     ${renderModal()}
     <div id="toast" class="toast hidden"></div>
   `;
+  initializeWikiGraphs();
 }
 
 function renderAuth() {
@@ -933,24 +938,223 @@ function renderWikiGraph(cards, compact = false) {
   const positionById = new Map(positions.map((position) => [position.id, position]));
   const edges = wikiRelations(sorted).filter((edge) => positionById.has(edge.sourceId) && positionById.has(edge.targetId));
   return `
-    <div class="wiki-graph ${compact ? "compact" : ""}" aria-label="Mapa de relaciones de la wiki">
+    <div class="wiki-graph ${compact ? "compact" : ""}" data-wiki-graph aria-label="Mapa de relaciones de la wiki">
       <svg class="wiki-graph-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
         ${edges.map((edge) => {
           const from = positionById.get(edge.sourceId);
           const to = positionById.get(edge.targetId);
-          return `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`;
+          return `<line data-source="${escapeAttr(edge.sourceId)}" data-target="${escapeAttr(edge.targetId)}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`;
         }).join("")}
       </svg>
       ${sorted.map((card, index) => {
         const position = positionById.get(card.id);
         const type = wikiType(card);
-        return `<button class="wiki-node ${index < 3 ? "featured" : ""}" style="left:${position.x}%;top:${position.y}%" data-action="select-wiki-card" data-id="${card.id}" title="Abrir ${escapeAttr(card.title)}">
+        return `<button class="wiki-node ${index < 3 ? "featured" : ""}" style="left:${position.x}%;top:${position.y}%" data-action="select-wiki-card" data-id="${card.id}" data-node-id="${card.id}" data-x="${position.x}" data-y="${position.y}" title="Arrastrar o abrir ${escapeAttr(card.title)}">
           <span class="wiki-node-icon">${type.icon}</span><span>${escapeHtml(card.title)}</span>
         </button>`;
       }).join("")}
       <div class="wiki-graph-legend"><span>${sorted.length} nodos</span><span>${edges.length} conexiones</span></div>
     </div>
   `;
+}
+
+function wikiGraphNodeKey(id) {
+  return `${activeCampaignId || "wiki"}:${id}`;
+}
+
+function clampGraphValue(value, min = 5, max = 95) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function initializeWikiGraphs() {
+  const graphs = [...document.querySelectorAll("[data-wiki-graph]")].map(setupWikiGraph).filter(Boolean);
+  if (!graphs.length) return;
+
+  let previousTime = performance.now();
+  const tick = (time) => {
+    const delta = Math.min(2, Math.max(0.35, (time - previousTime) / 16.67));
+    previousTime = time;
+    graphs.forEach((graphState) => stepWikiGraph(graphState, delta, time));
+    wikiGraphRuntime.frame = requestAnimationFrame(tick);
+  };
+
+  wikiGraphRuntime = {
+    frame: requestAnimationFrame(tick),
+    graphs,
+  };
+}
+
+function teardownWikiGraphs() {
+  if (!wikiGraphRuntime) return;
+  cancelAnimationFrame(wikiGraphRuntime.frame);
+  wikiGraphRuntime = null;
+}
+
+function setupWikiGraph(graph) {
+  const nodeElements = [...graph.querySelectorAll(".wiki-node[data-node-id]")];
+  if (!nodeElements.length) return null;
+
+  const nodes = new Map(
+    nodeElements.map((element, index) => {
+      const id = element.dataset.nodeId;
+      const remembered = wikiGraphNodeMemory.get(wikiGraphNodeKey(id));
+      const x = remembered?.x ?? Number(element.dataset.x || 50);
+      const y = remembered?.y ?? Number(element.dataset.y || 50);
+      element.style.left = `${x}%`;
+      element.style.top = `${y}%`;
+      return [id, { id, element, index, x, y, vx: 0, vy: 0, dragging: false }];
+    })
+  );
+
+  const edges = [...graph.querySelectorAll(".wiki-graph-lines line")]
+    .map((line) => ({ line, sourceId: line.dataset.source, targetId: line.dataset.target }))
+    .filter((edge) => nodes.has(edge.sourceId) && nodes.has(edge.targetId));
+
+  const graphState = { graph, nodes, edges, dragging: null };
+  graph.addEventListener("pointerdown", (event) => startWikiNodeDrag(event, graphState));
+  renderWikiGraphFrame(graphState);
+  return graphState;
+}
+
+function startWikiNodeDrag(event, graphState) {
+  const nodeElement = event.target.closest(".wiki-node[data-node-id]");
+  if (!nodeElement || !graphState.graph.contains(nodeElement)) return;
+
+  const node = graphState.nodes.get(nodeElement.dataset.nodeId);
+  if (!node) return;
+
+  const rect = graphState.graph.getBoundingClientRect();
+  const pointerX = ((event.clientX - rect.left) / Math.max(rect.width, 1)) * 100;
+  const pointerY = ((event.clientY - rect.top) / Math.max(rect.height, 1)) * 100;
+  graphState.dragging = {
+    node,
+    pointerId: event.pointerId,
+    offsetX: node.x - pointerX,
+    offsetY: node.y - pointerY,
+    startX: event.clientX,
+    startY: event.clientY,
+    moved: false,
+  };
+
+  node.dragging = true;
+  node.vx = 0;
+  node.vy = 0;
+  nodeElement.classList.add("dragging");
+  nodeElement.setPointerCapture(event.pointerId);
+  event.preventDefault();
+
+  nodeElement.addEventListener("pointermove", handleWikiNodeDragMove);
+  nodeElement.addEventListener("pointerup", stopWikiNodeDrag);
+  nodeElement.addEventListener("pointercancel", stopWikiNodeDrag);
+
+  function handleWikiNodeDragMove(moveEvent) {
+    if (moveEvent.pointerId !== graphState.dragging?.pointerId) return;
+    const moveRect = graphState.graph.getBoundingClientRect();
+    const nextX = ((moveEvent.clientX - moveRect.left) / Math.max(moveRect.width, 1)) * 100 + graphState.dragging.offsetX;
+    const nextY = ((moveEvent.clientY - moveRect.top) / Math.max(moveRect.height, 1)) * 100 + graphState.dragging.offsetY;
+    node.x = clampGraphValue(nextX);
+    node.y = clampGraphValue(nextY);
+    node.vx = 0;
+    node.vy = 0;
+    graphState.dragging.moved ||= Math.hypot(moveEvent.clientX - graphState.dragging.startX, moveEvent.clientY - graphState.dragging.startY) > 4;
+    wikiGraphNodeMemory.set(wikiGraphNodeKey(node.id), { x: node.x, y: node.y });
+    renderWikiGraphFrame(graphState);
+    moveEvent.preventDefault();
+  }
+
+  function stopWikiNodeDrag(upEvent) {
+    if (upEvent.pointerId !== graphState.dragging?.pointerId) return;
+    if (graphState.dragging.moved) wikiGraphClickSuppressedUntil = Date.now() + 220;
+    node.dragging = false;
+    nodeElement.classList.remove("dragging");
+    nodeElement.releasePointerCapture(upEvent.pointerId);
+    nodeElement.removeEventListener("pointermove", handleWikiNodeDragMove);
+    nodeElement.removeEventListener("pointerup", stopWikiNodeDrag);
+    nodeElement.removeEventListener("pointercancel", stopWikiNodeDrag);
+    graphState.dragging = null;
+  }
+}
+
+function stepWikiGraph(graphState, delta, time) {
+  const nodes = [...graphState.nodes.values()];
+  const centerForce = 0.0028 * delta;
+  const linkForce = 0.0019 * delta;
+  const repelForce = 0.15 * delta;
+
+  for (const node of nodes) {
+    if (node.dragging) continue;
+    node.vx += (50 - node.x) * centerForce;
+    node.vy += (50 - node.y) * centerForce;
+    node.vx += Math.sin(time * 0.0006 + node.index * 1.7) * 0.004 * delta;
+    node.vy += Math.cos(time * 0.0005 + node.index * 1.3) * 0.004 * delta;
+  }
+
+  for (const edge of graphState.edges) {
+    const source = graphState.nodes.get(edge.sourceId);
+    const target = graphState.nodes.get(edge.targetId);
+    const dx = target.x - source.x;
+    const dy = target.y - source.y;
+    const distance = Math.max(0.1, Math.hypot(dx, dy));
+    const pull = (distance - 13) * linkForce;
+    const forceX = (dx / distance) * pull;
+    const forceY = (dy / distance) * pull;
+    if (!source.dragging) {
+      source.vx += forceX;
+      source.vy += forceY;
+    }
+    if (!target.dragging) {
+      target.vx -= forceX;
+      target.vy -= forceY;
+    }
+  }
+
+  for (let i = 0; i < nodes.length; i += 1) {
+    for (let j = i + 1; j < nodes.length; j += 1) {
+      const a = nodes[i];
+      const b = nodes[j];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const distance = Math.max(0.1, Math.hypot(dx, dy));
+      if (distance > 18) continue;
+      const push = ((18 - distance) / 18) * repelForce;
+      const forceX = (dx / distance) * push;
+      const forceY = (dy / distance) * push;
+      if (!a.dragging) {
+        a.vx -= forceX;
+        a.vy -= forceY;
+      }
+      if (!b.dragging) {
+        b.vx += forceX;
+        b.vy += forceY;
+      }
+    }
+  }
+
+  for (const node of nodes) {
+    if (node.dragging) continue;
+    node.vx *= 0.91;
+    node.vy *= 0.91;
+    node.x = clampGraphValue(node.x + node.vx);
+    node.y = clampGraphValue(node.y + node.vy);
+    wikiGraphNodeMemory.set(wikiGraphNodeKey(node.id), { x: node.x, y: node.y });
+  }
+
+  renderWikiGraphFrame(graphState);
+}
+
+function renderWikiGraphFrame(graphState) {
+  for (const node of graphState.nodes.values()) {
+    node.element.style.left = `${node.x}%`;
+    node.element.style.top = `${node.y}%`;
+  }
+  for (const edge of graphState.edges) {
+    const source = graphState.nodes.get(edge.sourceId);
+    const target = graphState.nodes.get(edge.targetId);
+    edge.line.setAttribute("x1", source.x);
+    edge.line.setAttribute("y1", source.y);
+    edge.line.setAttribute("x2", target.x);
+    edge.line.setAttribute("y2", target.y);
+  }
 }
 
 function renderWikiHome(campaign, canManage) {
@@ -2117,6 +2321,11 @@ document.addEventListener("submit", async (event) => {
 document.addEventListener("click", async (event) => {
   const target = event.target.closest("[data-action]");
   if (!target) return;
+
+  if (target.closest(".wiki-node") && Date.now() < wikiGraphClickSuppressedUntil) {
+    event.preventDefault();
+    return;
+  }
 
   const action = target.dataset.action;
   const id = target.dataset.id;
