@@ -154,6 +154,16 @@ const WIKI_CARD_TYPES = {
   },
 };
 
+const WIKI_CONTENT_TYPES = {
+  text: { label: "Texto", icon: "☰", title: "Descripción", placeholder: "Escribí el contenido de esta sección..." },
+  image: { label: "Imagen", icon: "▧", title: "Galería", placeholder: "Pie de imagen o notas..." },
+  map: { label: "Mapa", icon: "⌖", title: "Mapa", placeholder: "Leyenda, escala y puntos de interés..." },
+  familyTree: { label: "Árbol familiar", icon: "♧", title: "Árbol familiar", placeholder: "Una relación por línea. Ej: Aureon → Lyra (hija)" },
+  timeline: { label: "Línea de tiempo", icon: "↝", title: "Línea de tiempo", placeholder: "Un evento por línea. Ej: 1423 — La caída de Luminar" },
+  statBlock5e: { label: "Estadísticas 5e", icon: "⚔", title: "Estadísticas 5e", placeholder: "CA 15 · PG 44 · Velocidad 30 pies\nFUE 16 · DES 12 · CON 14 · INT 10 · SAB 13 · CAR 11\nAcciones, rasgos y reacciones..." },
+  characterSheet5e: { label: "Hoja de personaje", icon: "♙", title: "Hoja de personaje 5e", placeholder: "Clase y nivel, características, competencias, equipo, conjuros y rasgos..." },
+};
+
 const defaultState = {
   users: [],
   currentUserId: null,
@@ -861,15 +871,49 @@ function renderCampaignTab(campaign, role, canManage) {
   return renderWikiTab(campaign, canManage);
 }
 
+function normalizedWikiPropertyItems(page) {
+  if (Array.isArray(page?.propertyItems)) {
+    return page.propertyItems.map((item, index) => ({
+      id: item.id || `property-${index}`,
+      icon: String(item.icon || "◆"),
+      label: String(item.label || "Propiedad"),
+      value: String(item.value || ""),
+    }));
+  }
+  const type = WIKI_CARD_TYPES[page?.type] || WIKI_CARD_TYPES.nota;
+  return Object.entries(page?.properties || {}).map(([key, value], index) => ({
+    id: `legacy-property-${index}`,
+    icon: "◆",
+    label: propertyLabel(type, key),
+    value: String(value || ""),
+  }));
+}
+
+function normalizedWikiContentBlocks(page) {
+  if (Array.isArray(page?.contentBlocks)) {
+    return page.contentBlocks.map((block, index) => ({
+      id: block.id || `block-${index}`,
+      type: WIKI_CONTENT_TYPES[block.type] ? block.type : "text",
+      title: String(block.title || WIKI_CONTENT_TYPES[block.type]?.title || "Sección"),
+      text: String(block.text || ""),
+      url: String(block.url || ""),
+    }));
+  }
+  const legacyText = String(page?.description ?? page?.content ?? "");
+  return legacyText ? [{ id: "legacy-description", type: "text", title: "Descripción", text: legacyText, url: "" }] : [];
+}
+
 function wikiCardsFor(campaign) {
   return (campaign?.wiki || []).map((page) => ({
     ...page,
     title: page.title || "Sin título",
     type: page.type || wikiTypeFromLegacyCategory(page.category),
     description: page.description ?? page.content ?? "",
-    aliases: Array.isArray(page.aliases) ? page.aliases : [],
+    aliases: [...new Set([page.title || "Sin título", ...(Array.isArray(page.aliases) ? page.aliases : [])])],
     folder: page.folder || WIKI_CARD_TYPES[page.type]?.label || page.category || "Notas",
     properties: page.properties && typeof page.properties === "object" ? page.properties : {},
+    propertyItems: normalizedWikiPropertyItems(page),
+    contentBlocks: normalizedWikiContentBlocks(page),
     relations: Array.isArray(page.relations) ? page.relations : [],
     modifiedAt: page.modifiedAt || page.createdAt || Date.now(),
     createdAt: page.createdAt || page.modifiedAt || Date.now(),
@@ -889,7 +933,13 @@ function wikiType(card) {
 }
 
 function cardAllText(card) {
-  return [card.title, ...(card.aliases || []), card.description, ...Object.values(card.properties || {})]
+  return [
+    card.title,
+    ...(card.aliases || []),
+    card.description,
+    ...normalizedWikiPropertyItems(card).flatMap((item) => [item.label, item.value]),
+    ...normalizedWikiContentBlocks(card).flatMap((block) => [block.title, block.text]),
+  ]
     .join(" ")
     .toLowerCase();
 }
@@ -1274,7 +1324,8 @@ function renderWikiInspector(card, allCards, canManage) {
   const type = wikiType(card);
   const edges = wikiRelations(allCards).filter((edge) => edge.sourceId === card.id || edge.targetId === card.id);
   const related = edges.map((edge) => allCards.find((item) => item.id === (edge.sourceId === card.id ? edge.targetId : edge.sourceId))).filter(Boolean);
-  const properties = Object.entries(card.properties || {}).filter(([, value]) => String(value || "").trim());
+  const properties = normalizedWikiPropertyItems(card).filter((item) => item.value.trim());
+  const contentBlocks = normalizedWikiContentBlocks(card);
   return `
     <article class="wiki-card-detail">
       <header class="wiki-detail-head">
@@ -1285,8 +1336,10 @@ function renderWikiInspector(card, allCards, canManage) {
         <div class="wiki-detail-main">
           ${card.aliases.length ? `<div class="wiki-property-row"><span>ALIASES</span><div>${card.aliases.map((alias) => `<em>${escapeHtml(alias)}</em>`).join("")}</div></div>` : ""}
           <div class="wiki-property-row"><span>CARPETA</span><div><em>▱ ${escapeHtml(card.folder)}</em></div></div>
-          ${properties.map(([key, value]) => `<div class="wiki-property-row"><span>${escapeHtml(propertyLabel(type, key).toUpperCase())}</span><div><strong>${linkMentions(value, allCards, card.id)}</strong></div></div>`).join("")}
-          <section class="wiki-description"><span>DESCRIPCIÓN</span><p>${linkMentions(card.description || "Sin descripción todavía.", allCards, card.id)}</p></section>
+          ${properties.map((item) => `<div class="wiki-property-row"><span><b>${escapeHtml(item.icon)}</b>${escapeHtml(item.label.toUpperCase())}</span><div><strong>${linkMentions(item.value, allCards, card.id)}</strong></div></div>`).join("")}
+          <div class="wiki-content-viewer">
+            ${contentBlocks.length ? contentBlocks.map((block) => renderWikiContentBlock(block, allCards, card.id)).join("") : `<section class="wiki-description"><span>CONTENIDO</span><p>Sin contenido todavía.</p></section>`}
+          </div>
         </div>
         <div class="wiki-detail-media">${card.imageUrl ? `<img src="${escapeAttr(card.imageUrl)}" alt="Imagen de ${escapeAttr(card.title)}" />` : `<div class="wiki-portrait-placeholder" data-wiki-type="${card.type}"><span>${type.icon}</span><small>Sin imagen</small></div>`}</div>
       </div>
@@ -1324,6 +1377,30 @@ function linkMentions(value, cards, currentId) {
     })
     .join("")
     .replaceAll("\n", "<br />");
+}
+
+function renderWikiContentBlock(block, cards, currentId) {
+  const type = WIKI_CONTENT_TYPES[block.type] || WIKI_CONTENT_TYPES.text;
+  const title = escapeHtml(block.title || type.title);
+  const text = linkMentions(block.text || "", cards, currentId);
+  if (block.type === "image" || block.type === "map") {
+    return `<section class="wiki-content-block wiki-content-${block.type}">
+      <div class="wiki-content-heading"><span>${type.icon} ${escapeHtml(type.label.toUpperCase())}</span><h2>${title}</h2></div>
+      ${block.url ? `<img src="${escapeAttr(block.url)}" alt="${escapeAttr(block.title || type.label)}" loading="lazy" />` : `<div class="wiki-content-placeholder"><span>${type.icon}</span><small>Agregá una imagen para este ${block.type === "map" ? "mapa" : "bloque"}.</small></div>`}
+      ${block.text ? `<p>${text}</p>` : ""}
+    </section>`;
+  }
+  const lines = String(block.text || "").split("\n").filter((line) => line.trim());
+  if (block.type === "timeline") {
+    return `<section class="wiki-content-block wiki-content-timeline"><div class="wiki-content-heading"><span>${type.icon} ${escapeHtml(type.label.toUpperCase())}</span><h2>${title}</h2></div><ol>${lines.map((line) => `<li>${linkMentions(line, cards, currentId)}</li>`).join("") || "<li>Sin eventos todavía.</li>"}</ol></section>`;
+  }
+  if (block.type === "familyTree") {
+    return `<section class="wiki-content-block wiki-content-family"><div class="wiki-content-heading"><span>${type.icon} ${escapeHtml(type.label.toUpperCase())}</span><h2>${title}</h2></div><div>${lines.map((line) => `<span>${linkMentions(line, cards, currentId)}</span>`).join("") || "<span>Sin relaciones todavía.</span>"}</div></section>`;
+  }
+  if (block.type === "statBlock5e" || block.type === "characterSheet5e") {
+    return `<section class="wiki-content-block wiki-content-sheet"><div class="wiki-content-heading"><span>${type.icon} ${escapeHtml(type.label.toUpperCase())}</span><h2>${title}</h2></div><div class="wiki-sheet-copy">${text || "Completá esta hoja desde el editor."}</div></section>`;
+  }
+  return `<section class="wiki-content-block wiki-description"><div class="wiki-content-heading"><span>${type.icon} ${escapeHtml(type.label.toUpperCase())}</span><h2>${title}</h2></div><p>${text || "Sin texto todavía."}</p></section>`;
 }
 
 function renderWikiSectionShell({ section, kicker, title, description, sidebar, main, aside, primaryAction = "" }) {
@@ -1866,6 +1943,7 @@ function renderPublicWiki(campaignId) {
 
 function renderPublicPage(page, cards = []) {
   const type = wikiType(page);
+  const contentBlocks = normalizedWikiContentBlocks(page);
   return `
     <article class="public-page">
       ${page.imageUrl ? `<img class="public-page-image" src="${escapeAttr(page.imageUrl)}" alt="" loading="lazy" />` : ""}
@@ -1873,7 +1951,7 @@ function renderPublicPage(page, cards = []) {
         <span class="tag gold">${type.icon} ${escapeHtml(type.label)}</span>
         <h2>${escapeHtml(page.title)}</h2>
         ${page.aliases.length ? `<p class="public-aliases">También conocido como ${page.aliases.map(escapeHtml).join(", ")}</p>` : ""}
-        <div>${escapeHtml(page.description)}</div>
+        <div class="wiki-content-viewer">${contentBlocks.map((block) => renderWikiContentBlock(block, cards, page.id)).join("") || `<p>Sin contenido todavía.</p>`}</div>
       </div>
     </article>
   `;
@@ -2060,6 +2138,43 @@ function renderWikiTypeModal() {
   `;
 }
 
+function wikiEditorPropertyItems(page, type) {
+  const items = normalizedWikiPropertyItems(page);
+  for (const [label] of type.fields) {
+    if (!items.some((item) => normalizeSearchText(item.label) === normalizeSearchText(label))) {
+      items.push({ id: uid("property"), icon: "◆", label, value: "" });
+    }
+  }
+  return items;
+}
+
+function wikiPropertyEditorRow(item, index) {
+  return `<div class="wiki-property-editor" data-property-row>
+    <input type="hidden" name="property_id_${index}" value="${escapeAttr(item.id || uid("property"))}" />
+    <label class="wiki-property-icon" title="Icono de la propiedad"><span>Icono</span><input name="property_icon_${index}" value="${escapeAttr(item.icon || "◆")}" aria-label="Icono" /></label>
+    <label class="field"><span>Nombre de propiedad</span><input class="input" name="property_label_${index}" value="${escapeAttr(item.label || "")}" placeholder="Ej: Portador" /></label>
+    <label class="field wiki-property-value"><span>Texto o ficha vinculada</span><input class="input" name="property_value_${index}" value="${escapeAttr(item.value || "")}" list="wiki-linkable-cards" placeholder="Escribí texto o el nombre de otra ficha" /></label>
+    <button class="wiki-row-remove" type="button" data-action="remove-wiki-property" aria-label="Quitar propiedad">×</button>
+  </div>`;
+}
+
+function wikiContentEditorBlock(block, index) {
+  const type = WIKI_CONTENT_TYPES[block.type] || WIKI_CONTENT_TYPES.text;
+  const supportsImage = block.type === "image" || block.type === "map";
+  return `<article class="wiki-content-editor" data-content-block>
+    <input type="hidden" name="block_id_${index}" value="${escapeAttr(block.id || uid("block"))}" />
+    <input type="hidden" name="block_type_${index}" value="${escapeAttr(block.type)}" />
+    <header><span>${type.icon} ${escapeHtml(type.label)}</span><button type="button" data-action="remove-content-block" aria-label="Quitar bloque">×</button></header>
+    <label class="field"><span>Título editable</span><input class="input wiki-block-title" name="block_title_${index}" value="${escapeAttr(block.title || type.title)}" placeholder="Título de la sección" /></label>
+    ${supportsImage ? `<div class="wiki-block-media-fields">
+      <label class="field"><span>URL de imagen</span><input class="input" name="block_url_${index}" type="url" value="${escapeAttr(String(block.url || "").startsWith("data:") ? "" : block.url || "")}" placeholder="https://..." /></label>
+      <label class="field"><span>o subir archivo</span><input class="input" name="block_file_${index}" type="file" accept="image/*" /></label>
+      <input type="hidden" name="block_existing_url_${index}" value="${escapeAttr(block.url || "")}" />
+    </div>` : `<input type="hidden" name="block_url_${index}" value="" />`}
+    <label class="field"><span>${supportsImage ? "Texto, leyenda o notas" : "Contenido editable"}</span><textarea class="textarea wiki-description-input" name="block_text_${index}" placeholder="${escapeAttr(type.placeholder)}">${escapeHtml(block.text || "")}</textarea></label>
+  </article>`;
+}
+
 function renderWikiModal(pageId) {
   const campaign = campaignById(activeCampaignId);
   const existingPage = campaign.wiki.find((item) => item.id === pageId);
@@ -2070,84 +2185,81 @@ function renderWikiModal(pageId) {
     aliases: [],
     folder: WIKI_CARD_TYPES[editing.wikiType || "nota"].label,
     properties: {},
+    propertyItems: [],
+    contentBlocks: [{ id: uid("block"), type: "text", title: "Descripción", text: "", url: "" }],
     relations: [],
     imageUrl: "",
     isPublic: true,
   };
   const type = wikiType(page);
-  const folders = [...new Set(wikiCardsFor(campaign).map((card) => card.folder).filter(Boolean))];
-  const relatedNames = wikiCardsFor(campaign)
-    .filter((card) => page.relations.includes(card.id))
-    .map((card) => card.title)
-    .join(", ");
+  const cards = wikiCardsFor(campaign);
+  const properties = wikiEditorPropertyItems(page, type);
+  const contentBlocks = normalizedWikiContentBlocks(page);
+  const folders = [...new Set(cards.map((card) => card.folder).filter(Boolean))];
+  const relatedNames = cards.filter((card) => page.relations.includes(card.id)).map((card) => card.title).join(", ");
+  const extraAliases = page.aliases.filter((alias) => normalizeSearchText(alias) !== normalizeSearchText(page.title));
 
   return `
     <div class="modal-backdrop wiki-modal-backdrop">
       <section class="modal-panel wiki-editor-modal">
         <header class="modal-head">
-          <div>
-            <span class="wiki-modal-kicker">${type.icon} ${type.label.toUpperCase()}</span>
-            <h2>${pageId ? "Editar ficha" : `Nueva ficha de ${type.label.toLowerCase()}`}</h2>
-            <p class="muted small">Los nombres y alias mencionados generarán conexiones en el mapa.</p>
-          </div>
+          <div><span class="wiki-modal-kicker">${type.icon} ${type.label.toUpperCase()}</span><h2>${pageId ? "Editar ficha" : `Nueva ficha de ${type.label.toLowerCase()}`}</h2><p class="muted small">Todo lo que mencione el nombre o alias de otra ficha quedará vinculado.</p></div>
           <button class="button ghost" data-action="close-modal" aria-label="Cerrar">×</button>
         </header>
         <form class="form-grid wiki-card-form" data-form="wiki">
           <input type="hidden" name="type" value="${page.type}" />
+          <datalist id="wiki-linkable-cards">${cards.filter((card) => card.id !== pageId).flatMap((card) => [card.title, ...card.aliases]).map((name) => `<option value="${escapeAttr(name)}"></option>`).join("")}</datalist>
           <div class="wiki-form-columns">
             <div class="wiki-form-main">
-              <label class="field">
-                <span>Nombre de la ficha</span>
-                <input class="input wiki-title-input" name="title" value="${escapeAttr(page.title)}" placeholder="Ej: Aureon el Radiante" required />
-              </label>
-              <label class="field">
-                <span>Aliases <small>separados por comas</small></span>
-                <input class="input" name="aliases" value="${escapeAttr(page.aliases.join(", "))}" placeholder="Ej: El Monarca Luminar, Aureon" />
-              </label>
-              <div class="wiki-form-pair">
-                <label class="field">
-                  <span>Carpeta</span>
-                  <input class="input" name="folder" list="wiki-folder-options" value="${escapeAttr(page.folder)}" placeholder="Ej: Personajes/Realeza" />
-                  <datalist id="wiki-folder-options">${folders.map((folder) => `<option value="${escapeAttr(folder)}"></option>`).join("")}</datalist>
-                </label>
-                <label class="field">
-                  <span>Visibilidad</span>
-                  <select class="select" name="isPublic">
-                    <option value="true" ${page.isPublic ? "selected" : ""}>Pública</option>
-                    <option value="false" ${!page.isPublic ? "selected" : ""}>Privada</option>
-                  </select>
-                </label>
-              </div>
-              <div class="wiki-dynamic-fields">
-                ${type.fields.map(([label, key, placeholder]) => `<label class="field"><span>${label}</span><input class="input" name="property_${key}" value="${escapeAttr(page.properties[key] || "")}" placeholder="${escapeAttr(placeholder)}" /></label>`).join("")}
-              </div>
-              <label class="field">
-                <span>Descripción</span>
-                <textarea class="textarea wiki-description-input" name="description" placeholder="Contá qué lugar ocupa esta ficha en el mundo..." required>${escapeHtml(page.description)}</textarea>
-              </label>
-              <label class="field">
-                <span>Relaciones manuales <small>opcional, por nombre y separadas por comas</small></span>
-                <input class="input" name="relationNames" value="${escapeAttr(relatedNames)}" placeholder="Ej: Luminar, Daga del olvido" />
-              </label>
+              <label class="field wiki-title-field"><span>Nombre</span><input class="input wiki-title-input" name="title" value="${escapeAttr(page.title)}" placeholder="Ej: Aureon el Radiante" required /></label>
+              <label class="field"><span>Aliases <small>el nombre siempre cuenta como alias</small></span><div class="wiki-alias-editor"><em data-primary-alias>${escapeHtml(page.title || "Nombre de la ficha")}</em><input class="input" name="aliases" value="${escapeAttr(extraAliases.join(", "))}" placeholder="Sumá otros aliases separados por comas" /></div></label>
+
+              <section class="wiki-editor-section">
+                <div class="wiki-editor-section-head"><div><span>PROPIEDADES</span><p>El icono, nombre y texto de cada propiedad son editables. Escribí el nombre de otra ficha para vincularla.</p></div></div>
+                <div class="wiki-property-editors" data-property-list>${properties.map(wikiPropertyEditorRow).join("")}</div>
+                <button class="wiki-add-property" type="button" data-action="add-wiki-property">＋ Añadir propiedad</button>
+              </section>
+
+              <section class="wiki-editor-section wiki-content-section">
+                <div class="wiki-editor-section-head"><div><span>CONTENIDO</span><p>Armá la ficha con los módulos que necesites. Sus títulos y textos se pueden editar.</p></div></div>
+                <div class="wiki-content-editors" data-content-list>${contentBlocks.map(wikiContentEditorBlock).join("")}</div>
+                <div class="wiki-content-add"><span>Agregar módulo</span><div>${Object.entries(WIKI_CONTENT_TYPES).map(([key, item]) => `<button type="button" data-action="add-content-block" data-block-type="${key}">${item.icon} ${item.label}</button>`).join("")}</div></div>
+              </section>
+
+              <details class="wiki-editor-organization">
+                <summary>Organización, relaciones y visibilidad</summary>
+                <div class="wiki-form-pair">
+                  <label class="field"><span>Carpeta</span><input class="input" name="folder" list="wiki-folder-options" value="${escapeAttr(page.folder)}" placeholder="Ej: Personajes/Realeza" /><datalist id="wiki-folder-options">${folders.map((folder) => `<option value="${escapeAttr(folder)}"></option>`).join("")}</datalist></label>
+                  <label class="field"><span>Visibilidad</span><select class="select" name="isPublic"><option value="true" ${page.isPublic ? "selected" : ""}>Pública</option><option value="false" ${!page.isPublic ? "selected" : ""}>Privada</option></select></label>
+                </div>
+                <label class="field"><span>Relaciones manuales <small>opcionales y separadas por comas</small></span><input class="input" name="relationNames" value="${escapeAttr(relatedNames)}" placeholder="Ej: Luminar, Daga del olvido" /></label>
+              </details>
             </div>
+
             <aside class="wiki-image-fields">
-              <div class="wiki-image-preview">
-                ${page.imageUrl ? `<img src="${escapeAttr(page.imageUrl)}" alt="Vista previa" />` : `<span>${type.icon}</span><small>Imagen de la ficha</small>`}
-              </div>
-              <label class="field"><span>Subir imagen</span><input class="input" name="imageFile" type="file" accept="image/*" /></label>
-              <label class="field"><span>o usar una URL</span><input class="input" name="imageUrl" type="url" value="${escapeAttr(page.imageUrl)}" placeholder="https://..." /></label>
+              <button class="wiki-image-preview wiki-image-trigger" type="button" data-action="open-wiki-image" aria-label="Elegir imagen de la ficha">
+                ${page.imageUrl ? `<img src="${escapeAttr(page.imageUrl)}" alt="Vista previa" />` : `<span>${type.icon}</span><small>Hacé click para agregar una imagen</small>`}
+              </button>
+              <p>Imagen de portada</p><small>Hacé click para pegar un enlace o subir un archivo.</small>
               <input type="hidden" name="existingImageUrl" value="${escapeAttr(page.imageUrl)}" />
-              ${page.imageUrl ? `<label class="check-field"><input type="checkbox" name="removeImage" />Quitar imagen</label>` : ""}
+              <input type="hidden" name="removeImage" value="" />
             </aside>
           </div>
-          <div class="wiki-form-footer">
-            <button class="button" type="button" data-action="${pageId ? "close-modal" : "back-to-wiki-types"}">${pageId ? "Cancelar" : "← Cambiar tipo"}</button>
-            <button class="button primary" type="submit"><span class="icon">✓</span>Guardar ficha</button>
+
+          <div class="wiki-image-dialog" data-wiki-image-dialog hidden>
+            <div class="wiki-image-dialog-card">
+              <header><div><span>IMAGEN DE LA FICHA</span><h3>Elegí una imagen</h3></div><button type="button" data-action="close-wiki-image" aria-label="Cerrar">×</button></header>
+              <label class="field"><span>Pegar enlace</span><input class="input" name="imageUrl" type="url" value="${escapeAttr(String(page.imageUrl || "").startsWith("data:") ? "" : page.imageUrl || "")}" placeholder="https://..." /></label>
+              <div class="wiki-image-or"><span></span><small>o</small><span></span></div>
+              <label class="wiki-file-drop"><span>⇧</span><strong>Subir desde tu dispositivo</strong><small>PNG, JPG, WEBP · máximo 4 MB</small><input name="imageFile" type="file" accept="image/*" /></label>
+              <footer>${page.imageUrl ? `<button class="button danger" type="button" data-action="remove-wiki-image">Quitar imagen</button>` : `<span></span>`}<button class="button primary" type="button" data-action="close-wiki-image">Aplicar</button></footer>
+            </div>
           </div>
+
+          <div class="wiki-form-footer"><button class="button" type="button" data-action="${pageId ? "close-modal" : "back-to-wiki-types"}">${pageId ? "Cancelar" : "← Cambiar tipo"}</button><button class="button primary" type="submit"><span class="icon">✓</span>Guardar ficha</button></div>
         </form>
       </section>
-    </div>
-  `;
+    </div>`;
 }
 
 function renderCharacterModal(characterId) {
@@ -2282,7 +2394,10 @@ document.addEventListener("submit", async (event) => {
   if (formType === "wiki") {
     const imageUrl = await wikiImageFromData(data);
     if (imageUrl === null) return;
+    const contentBlocks = await wikiContentBlocksFromData(data);
+    if (contentBlocks === null) return;
     data.imageUrl = imageUrl;
+    data.contentBlocks = contentBlocks;
     saveWikiPage(data);
     editing = null;
     wikiView = "cards";
@@ -2426,6 +2541,53 @@ document.addEventListener("click", async (event) => {
     render();
   }
 
+  if (action === "open-wiki-image") {
+    const dialog = target.closest("form")?.querySelector("[data-wiki-image-dialog]");
+    if (dialog) dialog.hidden = false;
+  }
+
+  if (action === "close-wiki-image") {
+    const dialog = target.closest("[data-wiki-image-dialog]");
+    if (dialog) dialog.hidden = true;
+  }
+
+  if (action === "remove-wiki-image") {
+    const form = target.closest("form");
+    const removeInput = form?.querySelector('input[name="removeImage"]');
+    const urlInput = form?.querySelector('input[name="imageUrl"]');
+    const fileInput = form?.querySelector('input[name="imageFile"]');
+    const preview = form?.querySelector(".wiki-image-preview");
+    if (removeInput) removeInput.value = "true";
+    if (urlInput) urlInput.value = "";
+    if (fileInput) fileInput.value = "";
+    if (preview) preview.innerHTML = "<span>＋</span><small>Hacé click para agregar una imagen</small>";
+    const dialog = target.closest("[data-wiki-image-dialog]");
+    if (dialog) dialog.hidden = true;
+  }
+
+  if (action === "add-wiki-property") {
+    const list = target.closest(".wiki-editor-section")?.querySelector("[data-property-list]");
+    if (list) list.insertAdjacentHTML("beforeend", wikiPropertyEditorRow({ id: uid("property"), icon: "◆", label: "", value: "" }, Date.now()));
+  }
+
+  if (action === "remove-wiki-property") {
+    target.closest("[data-property-row]")?.remove();
+  }
+
+  if (action === "add-content-block") {
+    const list = target.closest(".wiki-editor-section")?.querySelector("[data-content-list]");
+    const blockType = WIKI_CONTENT_TYPES[target.dataset.blockType] ? target.dataset.blockType : "text";
+    const type = WIKI_CONTENT_TYPES[blockType];
+    if (list) {
+      list.insertAdjacentHTML("beforeend", wikiContentEditorBlock({ id: uid("block"), type: blockType, title: type.title, text: "", url: "" }, Date.now()));
+      list.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }
+
+  if (action === "remove-content-block") {
+    target.closest("[data-content-block]")?.remove();
+  }
+
   if (action === "new-wiki-page") {
     editing = { type: "wiki-type" };
     render();
@@ -2523,16 +2685,32 @@ document.addEventListener("keydown", (event) => {
 document.addEventListener("change", (event) => {
   const fileInput = event.target.closest('.wiki-card-form input[name="imageFile"]');
   const file = fileInput?.files?.[0];
-  const preview = fileInput?.closest(".wiki-image-fields")?.querySelector(".wiki-image-preview");
+  const preview = fileInput?.closest("form")?.querySelector(".wiki-image-preview");
   if (!file || !preview || !file.type.startsWith("image/")) return;
   const reader = new FileReader();
   reader.addEventListener("load", () => {
     preview.innerHTML = `<img src="${escapeAttr(String(reader.result || ""))}" alt="Vista previa" />`;
+    const removeInput = fileInput.closest("form")?.querySelector('input[name="removeImage"]');
+    if (removeInput) removeInput.value = "";
   });
   reader.readAsDataURL(file);
 });
 
 document.addEventListener("input", (event) => {
+  const titleInput = event.target.closest('.wiki-card-form input[name="title"]');
+  if (titleInput) {
+    const primaryAlias = titleInput.closest("form")?.querySelector("[data-primary-alias]");
+    if (primaryAlias) primaryAlias.textContent = titleInput.value.trim() || "Nombre de la ficha";
+  }
+
+  const imageUrlInput = event.target.closest('.wiki-card-form input[name="imageUrl"]');
+  if (imageUrlInput) {
+    const preview = imageUrlInput.closest("form")?.querySelector(".wiki-image-preview");
+    if (preview && imageUrlInput.value.trim()) preview.innerHTML = `<img src="${escapeAttr(imageUrlInput.value.trim())}" alt="Vista previa" />`;
+    const removeInput = imageUrlInput.closest("form")?.querySelector('input[name="removeImage"]');
+    if (removeInput) removeInput.value = "";
+  }
+
   const dashboardInput = event.target.closest("[data-dashboard-search]");
   if (dashboardInput) {
     dashboardSearch = dashboardInput.value;
@@ -2839,11 +3017,14 @@ function saveWikiPage(data) {
   const campaign = campaignById(activeCampaignId);
   const existing = editing.id ? campaign.wiki.find((page) => page.id === editing.id) : null;
   const type = WIKI_CARD_TYPES[data.type] ? data.type : "nota";
-  const properties = {};
-  for (const [, key] of WIKI_CARD_TYPES[type].fields) {
-    const value = String(data[`property_${key}`] || "").trim();
-    if (value) properties[key] = value;
-  }
+  const propertyItems = wikiPropertyItemsFromData(data);
+  const properties = Object.fromEntries(propertyItems.filter((item) => item.value).map((item) => [item.label, item.value]));
+  const title = String(data.title || "").trim();
+  const aliases = [title, ...splitTags(data.aliases || "")]
+    .filter(Boolean)
+    .filter((alias, index, list) => list.findIndex((candidate) => normalizeSearchText(candidate) === normalizeSearchText(alias)) === index);
+  const contentBlocks = Array.isArray(data.contentBlocks) ? data.contentBlocks : [];
+  const description = contentBlocks.find((block) => block.type === "text")?.text || contentBlocks[0]?.text || "";
   const relationNames = splitTags(data.relationNames || "");
   const relationIds = wikiCardsFor(campaign)
     .filter((card) => relationNames.some((name) =>
@@ -2851,14 +3032,16 @@ function saveWikiPage(data) {
     ))
     .map((card) => card.id);
   const payload = {
-    title: data.title.trim(),
+    title,
     type,
     category: WIKI_CARD_TYPES[type].label,
-    aliases: splitTags(data.aliases || ""),
+    aliases,
     folder: String(data.folder || WIKI_CARD_TYPES[type].label).trim(),
     properties,
-    description: data.description.trim(),
-    content: data.description.trim(),
+    propertyItems,
+    contentBlocks,
+    description,
+    content: description,
     imageUrl: String(data.imageUrl || "").trim(),
     relations: relationIds,
     isPublic: data.isPublic === "true",
@@ -2873,6 +3056,56 @@ function saveWikiPage(data) {
     campaign.wiki.unshift({ id, createdAt: Date.now(), ...payload });
     selectedWikiCardId = id;
   }
+}
+
+function wikiPropertyItemsFromData(data) {
+  const indexes = Object.keys(data)
+    .map((key) => key.match(/^property_label_(.+)$/)?.[1])
+    .filter(Boolean)
+    .sort((a, b) => Number(a) - Number(b));
+  return indexes.map((index) => ({
+    id: String(data[`property_id_${index}`] || uid("property")),
+    icon: String(data[`property_icon_${index}`] || "◆").trim() || "◆",
+    label: String(data[`property_label_${index}`] || "").trim(),
+    value: String(data[`property_value_${index}`] || "").trim(),
+  })).filter((item) => item.label);
+}
+
+async function wikiContentBlocksFromData(data) {
+  const indexes = Object.keys(data)
+    .map((key) => key.match(/^block_type_(.+)$/)?.[1])
+    .filter(Boolean)
+    .sort((a, b) => Number(a) - Number(b));
+  const blocks = [];
+  for (const index of indexes) {
+    const type = WIKI_CONTENT_TYPES[data[`block_type_${index}`]] ? data[`block_type_${index}`] : "text";
+    let url = String(data[`block_url_${index}`] || data[`block_existing_url_${index}`] || "").trim();
+    const file = data[`block_file_${index}`];
+    if (file instanceof File && file.size > 0) {
+      if (!file.type.startsWith("image/")) {
+        showToast("Elegí un archivo de imagen para el módulo.");
+        return null;
+      }
+      if (file.size > 4 * 1024 * 1024) {
+        showToast("Las imágenes deben pesar menos de 4 MB.");
+        return null;
+      }
+      try {
+        url = await readFileAsDataUrl(file);
+      } catch {
+        showToast("No se pudo leer una de las imágenes.");
+        return null;
+      }
+    }
+    blocks.push({
+      id: String(data[`block_id_${index}`] || uid("block")),
+      type,
+      title: String(data[`block_title_${index}`] || WIKI_CONTENT_TYPES[type].title).trim(),
+      text: String(data[`block_text_${index}`] || "").trim(),
+      url,
+    });
+  }
+  return blocks;
 }
 
 function saveCharacter(data) {
