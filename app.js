@@ -198,7 +198,148 @@ const DND5E_CLASS_SAVES = {
   barbaro: ["str", "con"], bardo: ["dex", "cha"], clerigo: ["wis", "cha"], druida: ["int", "wis"],
   guerrero: ["str", "con"], monje: ["str", "dex"], paladin: ["wis", "cha"], explorador: ["str", "dex"],
   picaro: ["dex", "int"], hechicero: ["con", "cha"], brujo: ["wis", "cha"], mago: ["int", "wis"],
+  artifice: ["con", "int"],
 };
+
+const DND5E_ATTACK_ABILITIES = [
+  ["str", "Fuerza"],
+  ["dex", "Destreza"],
+  ["con", "Constitucion"],
+  ["int", "Inteligencia"],
+  ["wis", "Sabiduria"],
+  ["cha", "Carisma"],
+];
+
+const DND5E_DAMAGE_TYPES = [
+  "Contundente", "Perforante", "Cortante", "Acido", "Frio", "Fuego", "Fuerza", "Relampago",
+  "Necrotico", "Veneno", "Psiquico", "Radiante", "Trueno",
+];
+
+const DND5E_SPELL_CLASSES = ["Artifice", "Bardo", "Brujo", "Clerigo", "Druida", "Explorador", "Hechicero", "Mago", "Paladin"];
+
+const DND5E_SPELL_LIBRARY = [
+  { name: "Acid Splash", level: 0, classes: ["Artifice", "Hechicero", "Mago"] },
+  { name: "Blade Ward", level: 0, classes: ["Bardo", "Brujo", "Hechicero", "Mago"] },
+  { name: "Chill Touch", level: 0, classes: ["Brujo", "Hechicero", "Mago"] },
+  { name: "Dancing Lights", level: 0, classes: ["Bardo", "Hechicero", "Mago"] },
+  { name: "Druidcraft", level: 0, classes: ["Druida"] },
+  { name: "Eldritch Blast", level: 0, classes: ["Brujo"] },
+  { name: "Fire Bolt", level: 0, classes: ["Artifice", "Hechicero", "Mago"] },
+  { name: "Guidance", level: 0, classes: ["Artifice", "Clerigo", "Druida"] },
+  { name: "Light", level: 0, classes: ["Artifice", "Bardo", "Clerigo", "Hechicero", "Mago"] },
+  { name: "Mage Hand", level: 0, classes: ["Artifice", "Bardo", "Brujo", "Hechicero", "Mago"] },
+  { name: "Mending", level: 0, classes: ["Artifice", "Bardo", "Clerigo", "Druida", "Hechicero", "Mago"] },
+  { name: "Minor Illusion", level: 0, classes: ["Bardo", "Brujo", "Hechicero", "Mago"] },
+  { name: "Poison Spray", level: 0, classes: ["Brujo", "Druida", "Hechicero", "Mago"] },
+  { name: "Prestidigitation", level: 0, classes: ["Bardo", "Brujo", "Hechicero", "Mago"] },
+  { name: "Produce Flame", level: 0, classes: ["Druida"] },
+  { name: "Ray of Frost", level: 0, classes: ["Artifice", "Hechicero", "Mago"] },
+  { name: "Resistance", level: 0, classes: ["Artifice", "Clerigo", "Druida"] },
+  { name: "Sacred Flame", level: 0, classes: ["Clerigo"] },
+  { name: "Shillelagh", level: 0, classes: ["Druida"] },
+  { name: "Shocking Grasp", level: 0, classes: ["Artifice", "Hechicero", "Mago"] },
+  { name: "Spare the Dying", level: 0, classes: ["Clerigo"] },
+  { name: "Thaumaturgy", level: 0, classes: ["Clerigo"] },
+  { name: "True Strike", level: 0, classes: ["Bardo", "Brujo", "Hechicero", "Mago"] },
+  { name: "Alarm", level: 1, classes: ["Artifice", "Explorador", "Mago"] },
+  { name: "Animal Friendship", level: 1, classes: ["Bardo", "Druida", "Explorador"] },
+  { name: "Bane", level: 1, classes: ["Bardo", "Clerigo"] },
+  { name: "Bless", level: 1, classes: ["Clerigo", "Paladin"] },
+  { name: "Burning Hands", level: 1, classes: ["Hechicero", "Mago"] },
+  { name: "Charm Person", level: 1, classes: ["Bardo", "Druida", "Hechicero", "Mago"] },
+  { name: "Cure Wounds", level: 1, classes: ["Artifice", "Bardo", "Clerigo", "Druida", "Explorador", "Paladin"] },
+  { name: "Detect Magic", level: 1, classes: ["Artifice", "Bardo", "Clerigo", "Druida", "Explorador", "Paladin", "Hechicero", "Mago"] },
+  { name: "Disguise Self", level: 1, classes: ["Bardo", "Hechicero", "Mago"] },
+  { name: "Entangle", level: 1, classes: ["Druida"] },
+  { name: "Faerie Fire", level: 1, classes: ["Artifice", "Bardo", "Druida"] },
+  { name: "Feather Fall", level: 1, classes: ["Artifice", "Bardo", "Hechicero", "Mago"] },
+  { name: "Find Familiar", level: 1, classes: ["Mago"] },
+  { name: "Guiding Bolt", level: 1, classes: ["Clerigo"] },
+  { name: "Healing Word", level: 1, classes: ["Bardo", "Clerigo", "Druida"] },
+  { name: "Hex", level: 1, classes: ["Brujo"] },
+  { name: "Identify", level: 1, classes: ["Artifice", "Bardo", "Mago"] },
+  { name: "Mage Armor", level: 1, classes: ["Hechicero", "Mago"] },
+  { name: "Magic Missile", level: 1, classes: ["Hechicero", "Mago"] },
+  { name: "Shield", level: 1, classes: ["Hechicero", "Mago"] },
+  { name: "Sleep", level: 1, classes: ["Bardo", "Hechicero", "Mago"] },
+  { name: "Thunderwave", level: 1, classes: ["Bardo", "Druida", "Hechicero", "Mago"] },
+  { name: "Aid", level: 2, classes: ["Clerigo", "Paladin"] },
+  { name: "Alter Self", level: 2, classes: ["Hechicero", "Mago"] },
+  { name: "Barkskin", level: 2, classes: ["Druida", "Explorador"] },
+  { name: "Blur", level: 2, classes: ["Hechicero", "Mago"] },
+  { name: "Calm Emotions", level: 2, classes: ["Bardo", "Clerigo"] },
+  { name: "Darkness", level: 2, classes: ["Brujo", "Hechicero", "Mago"] },
+  { name: "Enhance Ability", level: 2, classes: ["Bardo", "Clerigo", "Druida", "Hechicero"] },
+  { name: "Flaming Sphere", level: 2, classes: ["Druida", "Mago"] },
+  { name: "Hold Person", level: 2, classes: ["Bardo", "Clerigo", "Druida", "Hechicero", "Mago"] },
+  { name: "Invisibility", level: 2, classes: ["Bardo", "Brujo", "Hechicero", "Mago"] },
+  { name: "Lesser Restoration", level: 2, classes: ["Artifice", "Bardo", "Clerigo", "Druida", "Paladin", "Explorador"] },
+  { name: "Moonbeam", level: 2, classes: ["Druida"] },
+  { name: "Misty Step", level: 2, classes: ["Brujo", "Hechicero", "Mago"] },
+  { name: "Pass without Trace", level: 2, classes: ["Druida", "Explorador"] },
+  { name: "Scorching Ray", level: 2, classes: ["Hechicero", "Mago"] },
+  { name: "Silence", level: 2, classes: ["Bardo", "Clerigo", "Explorador"] },
+  { name: "Spiritual Weapon", level: 2, classes: ["Clerigo"] },
+  { name: "Web", level: 2, classes: ["Hechicero", "Mago"] },
+  { name: "Counterspell", level: 3, classes: ["Brujo", "Hechicero", "Mago"] },
+  { name: "Dispel Magic", level: 3, classes: ["Bardo", "Clerigo", "Druida", "Paladin", "Brujo", "Hechicero", "Mago"] },
+  { name: "Fear", level: 3, classes: ["Bardo", "Brujo", "Hechicero", "Mago"] },
+  { name: "Fireball", level: 3, classes: ["Hechicero", "Mago"] },
+  { name: "Fly", level: 3, classes: ["Brujo", "Hechicero", "Mago"] },
+  { name: "Haste", level: 3, classes: ["Hechicero", "Mago"] },
+  { name: "Lightning Bolt", level: 3, classes: ["Hechicero", "Mago"] },
+  { name: "Mass Healing Word", level: 3, classes: ["Clerigo"] },
+  { name: "Plant Growth", level: 3, classes: ["Bardo", "Druida", "Explorador"] },
+  { name: "Revivify", level: 3, classes: ["Clerigo", "Paladin"] },
+  { name: "Spirit Guardians", level: 3, classes: ["Clerigo"] },
+  { name: "Tiny Hut", level: 3, classes: ["Bardo", "Mago"] },
+  { name: "Water Breathing", level: 3, classes: ["Druida", "Explorador", "Hechicero", "Mago"] },
+  { name: "Banishment", level: 4, classes: ["Clerigo", "Paladin", "Brujo", "Hechicero", "Mago"] },
+  { name: "Blight", level: 4, classes: ["Druida", "Brujo", "Hechicero", "Mago"] },
+  { name: "Confusion", level: 4, classes: ["Bardo", "Druida", "Hechicero", "Mago"] },
+  { name: "Dimension Door", level: 4, classes: ["Bardo", "Brujo", "Hechicero", "Mago"] },
+  { name: "Freedom of Movement", level: 4, classes: ["Bardo", "Clerigo", "Druida", "Explorador"] },
+  { name: "Greater Invisibility", level: 4, classes: ["Bardo", "Hechicero", "Mago"] },
+  { name: "Polymorph", level: 4, classes: ["Bardo", "Druida", "Hechicero", "Mago"] },
+  { name: "Wall of Fire", level: 4, classes: ["Druida", "Hechicero", "Mago"] },
+  { name: "Cloudkill", level: 5, classes: ["Hechicero", "Mago"] },
+  { name: "Commune", level: 5, classes: ["Clerigo"] },
+  { name: "Cone of Cold", level: 5, classes: ["Hechicero", "Mago"] },
+  { name: "Dominate Person", level: 5, classes: ["Bardo", "Hechicero", "Mago"] },
+  { name: "Flame Strike", level: 5, classes: ["Clerigo"] },
+  { name: "Greater Restoration", level: 5, classes: ["Bardo", "Clerigo", "Druida"] },
+  { name: "Mass Cure Wounds", level: 5, classes: ["Bardo", "Clerigo", "Druida"] },
+  { name: "Raise Dead", level: 5, classes: ["Bardo", "Clerigo", "Paladin"] },
+  { name: "Scrying", level: 5, classes: ["Bardo", "Clerigo", "Druida", "Brujo", "Mago"] },
+  { name: "Wall of Stone", level: 5, classes: ["Druida", "Hechicero", "Mago"] },
+  { name: "Chain Lightning", level: 6, classes: ["Hechicero", "Mago"] },
+  { name: "Disintegrate", level: 6, classes: ["Hechicero", "Mago"] },
+  { name: "Globe of Invulnerability", level: 6, classes: ["Hechicero", "Mago"] },
+  { name: "Heal", level: 6, classes: ["Clerigo", "Druida"] },
+  { name: "Heroes' Feast", level: 6, classes: ["Clerigo", "Druida"] },
+  { name: "Mass Suggestion", level: 6, classes: ["Bardo", "Brujo", "Hechicero", "Mago"] },
+  { name: "Sunbeam", level: 6, classes: ["Druida", "Hechicero", "Mago"] },
+  { name: "Teleport", level: 7, classes: ["Bardo", "Hechicero", "Mago"] },
+  { name: "Fire Storm", level: 7, classes: ["Clerigo", "Druida", "Hechicero"] },
+  { name: "Plane Shift", level: 7, classes: ["Clerigo", "Druida", "Brujo", "Hechicero", "Mago"] },
+  { name: "Regenerate", level: 7, classes: ["Bardo", "Clerigo", "Druida"] },
+  { name: "Resurrection", level: 7, classes: ["Bardo", "Clerigo"] },
+  { name: "Reverse Gravity", level: 7, classes: ["Druida", "Hechicero", "Mago"] },
+  { name: "Dominate Monster", level: 8, classes: ["Bardo", "Brujo", "Hechicero", "Mago"] },
+  { name: "Earthquake", level: 8, classes: ["Clerigo", "Druida", "Hechicero"] },
+  { name: "Holy Aura", level: 8, classes: ["Clerigo"] },
+  { name: "Power Word Stun", level: 8, classes: ["Bardo", "Brujo", "Hechicero", "Mago"] },
+  { name: "Sunburst", level: 8, classes: ["Druida", "Hechicero", "Mago"] },
+  { name: "Astral Projection", level: 9, classes: ["Clerigo", "Brujo", "Mago"] },
+  { name: "Foresight", level: 9, classes: ["Bardo", "Druida", "Brujo", "Mago"] },
+  { name: "Gate", level: 9, classes: ["Clerigo", "Hechicero", "Mago"] },
+  { name: "Mass Heal", level: 9, classes: ["Clerigo"] },
+  { name: "Meteor Swarm", level: 9, classes: ["Hechicero", "Mago"] },
+  { name: "Power Word Kill", level: 9, classes: ["Bardo", "Brujo", "Hechicero", "Mago"] },
+  { name: "Time Stop", level: 9, classes: ["Hechicero", "Mago"] },
+  { name: "True Resurrection", level: 9, classes: ["Clerigo", "Druida"] },
+  { name: "Wish", level: 9, classes: ["Hechicero", "Mago"] },
+];
 
 const defaultState = {
   users: [],
@@ -944,7 +1085,7 @@ function defaultCharacterSheet5e() {
     abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
     saveProficiencies: [], skillProficiencies: [], inspiration: false,
     armorBase: 10, armorBonus: 0, speed: 30, maxHp: "", currentHp: "", temporaryHp: "", hitDice: "", deathSuccesses: 0, deathFailures: 0,
-    attacks: "", spellcastingAbility: "int", spells: Object.fromEntries(Array.from({ length: 10 }, (_, level) => [level, []])),
+    attacks: "", weapons: [], spellcastingAbility: "int", spells: Object.fromEntries(Array.from({ length: 10 }, (_, level) => [level, []])),
     personality: "", ideals: "", bonds: "", flaws: "", proficiencies: "", features: "",
   };
 }
@@ -958,11 +1099,22 @@ function normalizedCharacterSheet5e(block) {
     name: String(spell?.name || ""),
     notes: String(spell?.notes || ""),
   })).filter((spell) => spell.name.trim())]));
+  const weapons = (Array.isArray(sheet.weapons) ? sheet.weapons : []).map((weapon, weaponIndex) => ({
+    id: String(weapon?.id || `weapon-${weaponIndex}`),
+    name: String(weapon?.name || ""),
+    damageDice: String(weapon?.damageDice || ""),
+    ability: DND5E_ATTACK_ABILITIES.some(([key]) => key === weapon?.ability) ? weapon.ability : "str",
+    proficient: Boolean(weapon?.proficient ?? true),
+    bonus: Number(weapon?.bonus) || 0,
+    damageType: DND5E_DAMAGE_TYPES.includes(weapon?.damageType) ? weapon.damageType : "Cortante",
+    notes: String(weapon?.notes || ""),
+  })).filter((weapon) => weapon.name.trim() || weapon.damageDice.trim());
   return {
     ...defaults,
     ...sheet,
     level: Math.max(1, Math.min(20, Number(sheet.level) || 1)),
     abilities,
+    weapons,
     spells,
     spellcastingAbility: DND5E_ABILITIES.some(([key]) => key === sheet.spellcastingAbility) ? sheet.spellcastingAbility : "int",
     saveProficiencies: Array.isArray(sheet.saveProficiencies) ? sheet.saveProficiencies.filter((key) => DND5E_ABILITIES.some(([ability]) => ability === key)) : [],
@@ -1462,6 +1614,39 @@ function linkMentions(value, cards, currentId) {
     .replaceAll("\n", "<br />");
 }
 
+function dnd5eSpellLibraryByLevel(level) {
+  return DND5E_SPELL_LIBRARY
+    .filter((spell) => spell.level === level)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function dnd5eSpellPicker(index, level) {
+  const spells = dnd5eSpellLibraryByLevel(level);
+  return `<details class="dnd5e-spell-picker">
+    <summary>Biblioteca rapida</summary>
+    <div>${DND5E_SPELL_CLASSES.map((className) => {
+      const classSpells = spells.filter((spell) => spell.classes.includes(className));
+      if (!classSpells.length) return "";
+      return `<details><summary>${className} <span>${classSpells.length}</span></summary><div>${classSpells.map((spell) => `<button type="button" data-action="load-5e-spell" data-block-index="${index}" data-spell-level="${level}" data-spell-name="${escapeAttr(spell.name)}" data-spell-class="${escapeAttr(className)}">${escapeHtml(spell.name)}</button>`).join("")}</div></details>`;
+    }).join("")}</div>
+  </details>`;
+}
+
+function characterWeaponEditorRow(blockIndex, weapon, rowKey) {
+  const prefix = `block_sheet_${blockIndex}_weapon_${rowKey}`;
+  return `<div class="dnd5e-weapon-editor-row" data-5e-weapon-row>
+    <input type="hidden" name="${prefix}_id" value="${escapeAttr(weapon.id || uid("weapon"))}" />
+    <label><span>Arma</span><input name="${prefix}_name" value="${escapeAttr(weapon.name || "")}" placeholder="Espada larga" /></label>
+    <label><span>Dado de golpe</span><input name="${prefix}_damageDice" value="${escapeAttr(weapon.damageDice || "")}" placeholder="1d8" /></label>
+    <label><span>Bonificador</span><select name="${prefix}_ability">${DND5E_ATTACK_ABILITIES.map(([key, label]) => `<option value="${key}" ${(weapon.ability || "str") === key ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+    <label><span>Tipo</span><select name="${prefix}_damageType">${DND5E_DAMAGE_TYPES.map((type) => `<option value="${escapeAttr(type)}" ${(weapon.damageType || "Cortante") === type ? "selected" : ""}>${escapeHtml(type)}</option>`).join("")}</select></label>
+    <label class="dnd5e-weapon-proficient"><input name="${prefix}_proficient" type="checkbox" ${(weapon.proficient ?? true) ? "checked" : ""} /><span>Competente</span></label>
+    <label><span>Extra</span><input name="${prefix}_bonus" type="number" value="${Number(weapon.bonus) || 0}" /></label>
+    <label class="dnd5e-weapon-notes"><span>Notas</span><input name="${prefix}_notes" value="${escapeAttr(weapon.notes || "")}" placeholder="Alcance, municion, propiedades..." /></label>
+    <button type="button" data-action="remove-5e-weapon" aria-label="Quitar arma">×</button>
+  </div>`;
+}
+
 function renderCharacterSheet5e(block) {
   const sheet = normalizedCharacterSheet5e(block);
   const proficiency = dnd5eProficiencyBonus(sheet.level);
@@ -1473,6 +1658,12 @@ function renderCharacterSheet5e(block) {
   const spellAbilityModifier = abilityModifier(sheet.spellcastingAbility);
   const spellSaveDc = 8 + proficiency + spellAbilityModifier;
   const spellAttackBonus = proficiency + spellAbilityModifier;
+  const weaponRows = sheet.weapons.map((weapon) => {
+    const ability = DND5E_ATTACK_ABILITIES.find(([key]) => key === weapon.ability) || DND5E_ATTACK_ABILITIES[0];
+    const total = abilityModifier(ability[0]) + (weapon.proficient ? proficiency : 0) + (Number(weapon.bonus) || 0);
+    const damageMod = abilityModifier(ability[0]);
+    return `<tr><td>${escapeHtml(weapon.name || "Arma")}</td><td>${signedDnd5e(total)}</td><td>${escapeHtml(weapon.damageDice || "-")}${damageMod ? ` ${signedDnd5e(damageMod)}` : ""} ${escapeHtml(weapon.damageType || "")}</td><td>${escapeHtml(ability[1])}${weapon.notes ? `<br /><small>${safeText(weapon.notes, "")}</small>` : ""}</td></tr>`;
+  }).join("");
 
   return `<div class="dnd5e-sheet dnd5e-sheet-view">
     <div class="dnd5e-sheet-banner">
@@ -1517,7 +1708,7 @@ function renderCharacterSheet5e(block) {
     </div></div>
     <div class="dnd5e-spell-page" data-5e-page-panel="spells" hidden>
       <div class="dnd5e-spell-head"><section><strong>${DND5E_ABILITIES.find(([key]) => key === sheet.spellcastingAbility)?.[2]}</strong><span>CARACTERISTICA MAGICA</span></section><section><strong>${spellSaveDc}</strong><span>CD SALVACION</span></section><section><strong>${signedDnd5e(spellAttackBonus)}</strong><span>BONO DE ATAQUE</span></section></div>
-      <section class="dnd5e-paper-box dnd5e-attacks"><div>${safeText(sheet.attacks, "Sin ataques cargados")}</div><h4>ATAQUES</h4></section>
+      <section class="dnd5e-paper-box dnd5e-attacks">${weaponRows ? `<table><thead><tr><th>Arma</th><th>Ataque</th><th>Dano</th><th>Mod.</th></tr></thead><tbody>${weaponRows}</tbody></table>` : `<div>${safeText(sheet.attacks, "Sin armas cargadas")}</div>`}<h4>ARMAS Y ATAQUES</h4></section>
       <div class="dnd5e-spell-levels">${Array.from({ length: 10 }, (_, level) => `<details class="dnd5e-spell-level" ${level === 0 ? "open" : ""}><summary><b>${level === 0 ? "Trucos" : `Nivel ${level}`}</b><span>${sheet.spells[level].length} conjuros</span></summary><div>${sheet.spells[level].map((spell) => `<details class="dnd5e-spell"><summary>${escapeHtml(spell.name)}</summary><p>${safeText(spell.notes, "Sin notas")}</p></details>`).join("") || `<p class="dnd5e-empty-spells">Sin conjuros en este nivel.</p>`}</div></details>`).join("")}</div>
     </div>
   </div>`;
@@ -2323,6 +2514,7 @@ function characterSheet5eEditor(block, index) {
   const modifier = (key) => dnd5eModifier(sheet.abilities[key]);
   const skillTotal = (key, ability) => modifier(ability) + (sheet.skillProficiencies.includes(key) ? proficiency : 0);
   const spellModifier = modifier(sheet.spellcastingAbility);
+  const weaponRows = sheet.weapons.map((weapon, rowKey) => characterWeaponEditorRow(index, weapon, rowKey)).join("");
   return `<div class="dnd5e-sheet dnd5e-sheet-editor" data-5e-sheet-editor>
     <div class="dnd5e-editor-note"><strong>Calculos automaticos</strong><span>Al cambiar nivel o caracteristicas se actualizan modificadores, competencia, salvaciones, habilidades, iniciativa, percepcion pasiva y armadura.</span></div>
     <div class="dnd5e-sheet-banner dnd5e-editor-banner">
@@ -2365,8 +2557,8 @@ function characterSheet5eEditor(block, index) {
     </div></div>
     <div class="dnd5e-spell-page" data-5e-page-panel="spells" hidden>
       <div class="dnd5e-spell-head"><label><select data-5e-spell-ability name="${name("spellcastingAbility")}">${DND5E_ABILITIES.map(([key, label, short]) => `<option value="${key}" ${sheet.spellcastingAbility === key ? "selected" : ""}>${label} (${short})</option>`).join("")}</select><span>CARACTERISTICA MAGICA</span></label><section><output data-5e-spell-dc>${8 + proficiency + spellModifier}</output><span>CD SALVACION</span></section><section><output data-5e-spell-attack>${signedDnd5e(proficiency + spellModifier)}</output><span>BONO DE ATAQUE</span></section></div>
-      <label class="dnd5e-paper-box dnd5e-attacks"><textarea name="${name("attacks")}" placeholder="Armas, bonificadores, dano y notas de ataque">${escapeHtml(sheet.attacks || "")}</textarea><h4>ATAQUES</h4></label>
-      <div class="dnd5e-spell-levels">${Array.from({ length: 10 }, (_, level) => `<details class="dnd5e-spell-level" ${level === 0 ? "open" : ""}><summary><b>${level === 0 ? "Trucos" : `Nivel ${level}`}</b><span>${sheet.spells[level].length} conjuros</span></summary><div data-5e-spell-list>${sheet.spells[level].map((spell, rowKey) => characterSpellEditorRow(index, level, spell, rowKey)).join("")}</div><button class="dnd5e-add-spell" type="button" data-action="add-5e-spell" data-block-index="${index}" data-spell-level="${level}">＋ Agregar conjuro</button></details>`).join("")}</div>
+      <section class="dnd5e-paper-box dnd5e-attacks"><div data-5e-weapon-list>${weaponRows}</div><button class="dnd5e-add-spell" type="button" data-action="add-5e-weapon" data-block-index="${index}">＋ Agregar arma</button>${sheet.attacks ? `<label class="dnd5e-legacy-attacks"><span>Notas viejas de ataques</span><textarea name="${name("attacks")}" placeholder="Notas generales">${escapeHtml(sheet.attacks || "")}</textarea></label>` : `<input type="hidden" name="${name("attacks")}" value="" />`}<h4>ARMAS Y ATAQUES</h4></section>
+      <div class="dnd5e-spell-levels">${Array.from({ length: 10 }, (_, level) => `<details class="dnd5e-spell-level" ${level === 0 ? "open" : ""}><summary><b>${level === 0 ? "Trucos" : `Nivel ${level}`}</b><span>${sheet.spells[level].length} conjuros</span></summary>${dnd5eSpellPicker(index, level)}<div data-5e-spell-list>${sheet.spells[level].map((spell, rowKey) => characterSpellEditorRow(index, level, spell, rowKey)).join("")}</div><button class="dnd5e-add-spell" type="button" data-action="add-5e-spell" data-block-index="${index}" data-spell-level="${level}">＋ Cargarlo vos</button></details>`).join("")}</div>
     </div>
     <input type="hidden" name="block_text_${index}" value="" />
     <input type="hidden" name="block_url_${index}" value="" />
@@ -2816,8 +3008,27 @@ document.addEventListener("click", async (event) => {
     if (list) list.insertAdjacentHTML("beforeend", characterSpellEditorRow(target.dataset.blockIndex, level, { id: uid("spell"), name: "", notes: "" }, Date.now()));
   }
 
+  if (action === "load-5e-spell") {
+    const list = target.closest(".dnd5e-spell-level")?.querySelector("[data-5e-spell-list]");
+    const level = Math.max(0, Math.min(9, Number(target.dataset.spellLevel) || 0));
+    const spellName = target.dataset.spellName || "";
+    const spellClass = target.dataset.spellClass || "";
+    if (list && spellName) {
+      list.insertAdjacentHTML("beforeend", characterSpellEditorRow(target.dataset.blockIndex, level, { id: uid("spell"), name: spellName, notes: spellClass ? `Cargado desde ${spellClass}.` : "" }, Date.now()));
+    }
+  }
+
   if (action === "remove-5e-spell") {
     target.closest("[data-5e-spell-row]")?.remove();
+  }
+
+  if (action === "add-5e-weapon") {
+    const list = target.closest(".dnd5e-attacks")?.querySelector("[data-5e-weapon-list]");
+    if (list) list.insertAdjacentHTML("beforeend", characterWeaponEditorRow(target.dataset.blockIndex, { id: uid("weapon"), name: "", damageDice: "", ability: "str", proficient: true, bonus: 0, damageType: "Cortante", notes: "" }, Date.now()));
+  }
+
+  if (action === "remove-5e-weapon") {
+    target.closest("[data-5e-weapon-row]")?.remove();
   }
 
   if (action === "new-wiki-page") {
@@ -3355,6 +3566,7 @@ function wikiPropertyItemsFromData(data) {
 function characterSheet5eFromData(data, index) {
   const field = (key) => data[`block_sheet_${index}_${key}`];
   const spells = Object.fromEntries(Array.from({ length: 10 }, (_, level) => [level, []]));
+  const weapons = [];
   Object.keys(data).forEach((key) => {
     const match = key.match(new RegExp(`^block_sheet_${index}_spell_(\\d+)_([^_]+)_name$`));
     if (!match) return;
@@ -3364,6 +3576,25 @@ function characterSheet5eFromData(data, index) {
     if (!name || !spells[level]) return;
     const prefix = `block_sheet_${index}_spell_${level}_${rowKey}`;
     spells[level].push({ id: String(data[`${prefix}_id`] || uid("spell")), name, notes: String(data[`${prefix}_notes`] || "").trim() });
+  });
+  Object.keys(data).forEach((key) => {
+    const match = key.match(new RegExp(`^block_sheet_${index}_weapon_(.+)_name$`));
+    if (!match) return;
+    const rowKey = match[1];
+    const prefix = `block_sheet_${index}_weapon_${rowKey}`;
+    const weaponName = String(data[key] || "").trim();
+    const damageDice = String(data[`${prefix}_damageDice`] || "").trim();
+    if (!weaponName && !damageDice) return;
+    weapons.push({
+      id: String(data[`${prefix}_id`] || uid("weapon")),
+      name: weaponName,
+      damageDice,
+      ability: String(data[`${prefix}_ability`] || "str"),
+      proficient: Boolean(data[`${prefix}_proficient`]),
+      bonus: Number(data[`${prefix}_bonus`]) || 0,
+      damageType: String(data[`${prefix}_damageType`] || "Cortante"),
+      notes: String(data[`${prefix}_notes`] || "").trim(),
+    });
   });
   return normalizedCharacterSheet5e({
     type: "characterSheet5e",
@@ -3382,6 +3613,7 @@ function characterSheet5eFromData(data, index) {
       inspiration: Boolean(field("inspiration")),
       spellcastingAbility: String(field("spellcastingAbility") || "int"),
       spells,
+      weapons,
       armorBase: Number(field("armorBase")) || 10,
       armorBonus: Number(field("armorBonus")) || 0,
       speed: Number(field("speed")) || 30,
