@@ -164,6 +164,25 @@ const WIKI_CONTENT_TYPES = {
   characterSheet5e: { label: "Hoja de personaje", icon: "♙", title: "Hoja de personaje 5e", placeholder: "Clase y nivel, características, competencias, equipo, conjuros y rasgos..." },
 };
 
+const WIKI_PROPERTY_PRESETS = [
+  { label: "Estado", icon: "●" },
+  { label: "Rol", icon: "♙" },
+  { label: "Raza", icon: "♞" },
+  { label: "Ubicacion", icon: "⌖" },
+  { label: "Faccion", icon: "⚑" },
+  { label: "Alineamiento", icon: "✦" },
+  { label: "Tema", icon: "◎" },
+  { label: "Fecha", icon: "⌛" },
+  { label: "Momento historico", icon: "⌛" },
+  { label: "Relaciones", icon: "⛓" },
+  { label: "Familiar", icon: "⛓" },
+  { label: "Fuente", icon: "✎" },
+  { label: "Secreto", icon: "◈" },
+  { label: "Peligro", icon: "⚠" },
+];
+
+const WIKI_PROPERTY_ICONS = ["◆", "●", "✦", "♙", "♞", "⚑", "⌖", "⌛", "◎", "✎", "⛓", "◈", "⚠", "⚔", "⚘", "☾", "☀", "♜"];
+
 const DND5E_ABILITIES = [
   ["str", "Fuerza", "FUE"],
   ["dex", "Destreza", "DES"],
@@ -1048,6 +1067,17 @@ function renderCampaignTab(campaign, role, canManage) {
   return renderWikiTab(campaign, canManage);
 }
 
+function isWikiImageIcon(icon) {
+  return /^(data:image\/|https?:\/\/)/i.test(String(icon || "").trim());
+}
+
+function renderWikiPropertyIcon(icon, className = "") {
+  const safeIcon = String(icon || "◆").trim() || "◆";
+  return isWikiImageIcon(safeIcon)
+    ? `<img class="wiki-property-image-icon ${className}" src="${escapeAttr(safeIcon)}" alt="" />`
+    : `<span class="wiki-property-glyph-icon ${className}">${escapeHtml(safeIcon)}</span>`;
+}
+
 function normalizedWikiPropertyItems(page) {
   if (Array.isArray(page?.propertyItems)) {
     return page.propertyItems.map((item, index) => ({
@@ -1604,7 +1634,7 @@ function renderWikiInspector(card, allCards, canManage) {
         <div class="wiki-detail-main">
           ${card.aliases.length ? `<div class="wiki-property-row"><span>ALIASES</span><div>${card.aliases.map((alias) => `<em>${escapeHtml(alias)}</em>`).join("")}</div></div>` : ""}
           <div class="wiki-property-row"><span>CARPETA</span><div><em>▱ ${escapeHtml(card.folder)}</em></div></div>
-          ${properties.map((item) => `<div class="wiki-property-row"><span><b>${escapeHtml(item.icon)}</b>${escapeHtml(item.label.toUpperCase())}</span><div><strong>${linkMentions(item.value, allCards, card.id)}</strong></div></div>`).join("")}
+          ${properties.map((item) => `<div class="wiki-property-row"><span><b>${renderWikiPropertyIcon(item.icon)}</b>${escapeHtml(item.label.toUpperCase())}</span><div><strong>${linkMentions(item.value, allCards, card.id)}</strong></div></div>`).join("")}
           <div class="wiki-content-viewer">
             ${contentBlocks.length ? contentBlocks.map((block) => renderWikiContentBlock(block, allCards, card.id)).join("") : `<section class="wiki-description"><span>CONTENIDO</span><p>Sin contenido todavía.</p></section>`}
           </div>
@@ -2033,6 +2063,79 @@ function renderStatBlock5e(block, cards, currentId) {
   </article>`;
 }
 
+function wikiPropertyValue(card, labels) {
+  const labelSet = labels.map(normalizeSearchText);
+  return normalizedWikiPropertyItems(card)
+    .find((item) => labelSet.some((label) => normalizeSearchText(item.label).includes(label)))?.value || "";
+}
+
+function wikiHistoryMoment(card) {
+  return wikiPropertyValue(card, ["momento historico", "cronologia", "periodo", "epoca", "fecha", "ano", "año"]);
+}
+
+function isWikiFamilyProperty(item) {
+  const label = normalizeSearchText(item.label);
+  return label.includes("familiar") || label.includes("familia") || label.includes("parentesco");
+}
+
+function wikiCardsFromPropertyValue(value, cards) {
+  const normalizedValue = normalizeSearchText(value);
+  return [...new Map(cards
+    .flatMap((card) => [card.title, ...(card.aliases || [])].map((name) => ({ card, name })))
+    .filter(({ name }) => normalizeSearchText(name).length > 2 && normalizedValue.includes(normalizeSearchText(name)))
+    .sort((a, b) => b.name.length - a.name.length)
+    .map(({ card }) => [card.id, card])).values()];
+}
+
+function wikiFamilyConnections(cards) {
+  return cards.flatMap((card) => normalizedWikiPropertyItems(card)
+    .filter(isWikiFamilyProperty)
+    .flatMap((item) => wikiCardsFromPropertyValue(item.value, cards).map((target) => ({ sourceId: card.id, target, item })))
+    .filter((connection) => connection.target.id !== card.id)
+    .map((connection) => ({ ...connection, targetId: connection.target.id })));
+}
+
+function renderWikiFamilyTree(card, cards) {
+  const connections = wikiFamilyConnections(cards);
+  const connected = new Map();
+  connections.forEach((connection) => {
+    if (!connected.has(connection.sourceId)) connected.set(connection.sourceId, []);
+    if (!connected.has(connection.targetId)) connected.set(connection.targetId, []);
+    connected.get(connection.sourceId).push({ id: connection.targetId, item: connection.item });
+    connected.get(connection.targetId).push({ id: connection.sourceId, item: connection.item });
+  });
+  const byId = new Map(cards.map((item) => [item.id, item]));
+  const levels = [[{ id: card.id, item: null }]];
+  const seen = new Set([card.id]);
+  while (levels.at(-1)?.length && levels.length < 6) {
+    const next = [];
+    levels.at(-1).forEach((entry) => (connected.get(entry.id) || []).forEach((neighbor) => {
+      if (!seen.has(neighbor.id)) {
+        seen.add(neighbor.id);
+        next.push(neighbor);
+      }
+    }));
+    if (!next.length) break;
+    levels.push(next);
+  }
+  if (levels.length === 1) {
+    return `<div class="wiki-family-empty">Agregá una propiedad <strong>Familiar</strong> y escribí el nombre o alias de otra ficha para construir este árbol.</div>`;
+  }
+  return `<div class="wiki-family-tree" aria-label="Árbol familiar de ${escapeAttr(card.title)}">
+    ${levels.map((generation, index) => `<div class="wiki-family-generation ${index === 0 ? "root" : ""}"><small>${index === 0 ? "FICHA PRINCIPAL" : index === 1 ? "FAMILIA VINCULADA" : `FAMILIA · NIVEL ${index}`}</small><div>${generation.map((entry) => {
+      const relative = byId.get(entry.id);
+      if (!relative) return "";
+      return `<button type="button" data-action="select-wiki-card" data-id="${escapeAttr(relative.id)}"><span>${wikiType(relative).icon}</span><strong>${escapeHtml(relative.title)}</strong>${entry.item?.value ? `<em>${escapeHtml(entry.item.label)}</em>` : ""}</button>`;
+    }).join("")}</div></div>`).join("")}
+  </div>`;
+}
+
+function renderWikiTimeline(card, block, cards, currentId) {
+  const moment = wikiHistoryMoment(card);
+  const events = String(block.text || "").split("\n").map((line) => line.trim()).filter(Boolean);
+  return `<section class="wiki-content-block wiki-content-timeline"><div class="wiki-content-heading"><span>↝ LÍNEA DE TIEMPO</span><h2>${escapeHtml(block.title || "Línea de tiempo")}</h2></div><div class="wiki-timeline-placement"><span>UBICACIÓN EN LA HISTORIA DEL MUNDO</span><strong>${moment ? linkMentions(moment, cards, currentId) : "Sin fecha o período definido"}</strong><small>${moment ? `Los hechos de ${escapeHtml(card.title)} se sitúan en este momento.` : "Agregá una propiedad Fecha, Período o Momento histórico a esta ficha."}</small></div><ol>${events.map((line) => `<li>${linkMentions(line, cards, currentId)}</li>`).join("") || "<li>Agregá un hecho por línea para detallar los eventos de esta ficha.</li>"}</ol></section>`;
+}
+
 function renderWikiContentBlock(block, cards, currentId) {
   const type = WIKI_CONTENT_TYPES[block.type] || WIKI_CONTENT_TYPES.text;
   const title = escapeHtml(block.title || type.title);
@@ -2044,12 +2147,12 @@ function renderWikiContentBlock(block, cards, currentId) {
       ${block.text ? `<p>${text}</p>` : ""}
     </section>`;
   }
-  const lines = String(block.text || "").split("\n").filter((line) => line.trim());
   if (block.type === "timeline") {
-    return `<section class="wiki-content-block wiki-content-timeline"><div class="wiki-content-heading"><span>${type.icon} ${escapeHtml(type.label.toUpperCase())}</span><h2>${title}</h2></div><ol>${lines.map((line) => `<li>${linkMentions(line, cards, currentId)}</li>`).join("") || "<li>Sin eventos todavía.</li>"}</ol></section>`;
+    return renderWikiTimeline(cards.find((card) => card.id === currentId) || { title: "Esta ficha", propertyItems: [] }, block, cards, currentId);
   }
   if (block.type === "familyTree") {
-    return `<section class="wiki-content-block wiki-content-family"><div class="wiki-content-heading"><span>${type.icon} ${escapeHtml(type.label.toUpperCase())}</span><h2>${title}</h2></div><div>${lines.map((line) => `<span>${linkMentions(line, cards, currentId)}</span>`).join("") || "<span>Sin relaciones todavía.</span>"}</div></section>`;
+    const card = cards.find((item) => item.id === currentId) || { id: currentId, title: "Esta ficha", propertyItems: [] };
+    return `<section class="wiki-content-block wiki-content-family"><div class="wiki-content-heading"><span>${type.icon} ${escapeHtml(type.label.toUpperCase())}</span><h2>${title}</h2></div>${renderWikiFamilyTree(card, cards)}</section>`;
   }
   if (block.type === "characterSheet5e") {
     return `<section class="wiki-content-block wiki-content-sheet wiki-content-character-sheet"><div class="wiki-content-heading"><span>${type.icon} ${escapeHtml(type.label.toUpperCase())}</span><h2>${title}</h2></div>${renderCharacterSheet5e(block)}</section>`;
@@ -2805,10 +2908,28 @@ function wikiEditorPropertyItems(page, type) {
   return items;
 }
 
+function wikiAliasChip(alias, index) {
+  return `<span class="wiki-alias-chip" data-alias-chip><input type="hidden" name="alias_${index}" value="${escapeAttr(alias)}" /><span>${escapeHtml(alias)}</span><button type="button" data-action="remove-wiki-alias" aria-label="Quitar alias ${escapeAttr(alias)}">×</button></span>`;
+}
+
+function wikiPropertyPicker(type, properties) {
+  const existing = new Set(properties.map((item) => normalizeSearchText(item.label)));
+  const typePresets = type.fields.map(([label]) => ({ label, icon: "◆" }));
+  const choices = [...typePresets, ...WIKI_PROPERTY_PRESETS]
+    .filter((item, index, list) => list.findIndex((candidate) => normalizeSearchText(candidate.label) === normalizeSearchText(item.label)) === index)
+    .filter((item) => !existing.has(normalizeSearchText(item.label)));
+  return `<div class="wiki-property-picker" data-property-picker hidden>
+    <span>Elegí una propiedad</span>
+    <div>${choices.map((item) => `<button type="button" data-action="add-wiki-property-preset" data-property-label="${escapeAttr(item.label)}" data-property-icon="${escapeAttr(item.icon)}">${renderWikiPropertyIcon(item.icon)}${escapeHtml(item.label)}</button>`).join("")}</div>
+    <button class="wiki-property-custom" type="button" data-action="add-wiki-property-custom">＋ Crear propiedad propia</button>
+  </div>`;
+}
+
 function wikiPropertyEditorRow(item, index) {
+  const icon = item.icon || "◆";
   return `<div class="wiki-property-editor" data-property-row>
     <input type="hidden" name="property_id_${index}" value="${escapeAttr(item.id || uid("property"))}" />
-    <label class="wiki-property-icon" title="Icono de la propiedad"><span>Icono</span><input name="property_icon_${index}" value="${escapeAttr(item.icon || "◆")}" aria-label="Icono" /></label>
+    <label class="wiki-property-icon" title="Icono de la propiedad"><span>Icono</span><input type="hidden" data-property-icon-input name="property_icon_${index}" value="${escapeAttr(icon)}" /><details class="wiki-icon-picker"><summary data-property-icon-preview>${renderWikiPropertyIcon(icon)}</summary><div><span>Elegí un icono</span><section>${WIKI_PROPERTY_ICONS.map((option) => `<button type="button" data-action="select-wiki-property-icon" data-property-icon="${escapeAttr(option)}">${renderWikiPropertyIcon(option)}</button>`).join("")}</section><label class="wiki-icon-upload">Cargar tu icono<input data-property-icon-file name="property_icon_file_${index}" type="file" accept="image/*" /></label></div></details></label>
     <label class="field"><span>Nombre de propiedad</span><input class="input" name="property_label_${index}" value="${escapeAttr(item.label || "")}" placeholder="Ej: Portador" /></label>
     <label class="field wiki-property-value"><span>Texto o ficha vinculada</span><input class="input" name="property_value_${index}" value="${escapeAttr(item.value || "")}" list="wiki-linkable-cards" placeholder="Escribí texto o el nombre de otra ficha" /></label>
     <button class="wiki-row-remove" type="button" data-action="remove-wiki-property" aria-label="Quitar propiedad">×</button>
@@ -2923,7 +3044,7 @@ function wikiContentEditorBlock(block, index) {
       <label class="field"><span>o subir archivo</span><input class="input" name="block_file_${index}" type="file" accept="image/*" /></label>
       <input type="hidden" name="block_existing_url_${index}" value="${escapeAttr(block.url || "")}" />
     </div>` : `<input type="hidden" name="block_url_${index}" value="" />`}
-    ${block.type === "characterSheet5e" || block.type === "statBlock5e" ? `<input type="hidden" name="block_text_${index}" value="" />` : `<label class="field"><span>${supportsImage ? "Texto, leyenda o notas" : "Contenido editable"}</span><textarea class="textarea wiki-description-input" name="block_text_${index}" placeholder="${escapeAttr(type.placeholder)}">${escapeHtml(block.text || "")}</textarea></label>`}
+    ${block.type === "characterSheet5e" || block.type === "statBlock5e" ? `<input type="hidden" name="block_text_${index}" value="" />` : block.type === "familyTree" ? `<input type="hidden" name="block_text_${index}" value="${escapeAttr(block.text || "")}" /><p class="wiki-family-editor-note">El árbol se genera automáticamente con todas las fichas conectadas mediante una propiedad llamada <strong>Familiar</strong>.</p>` : `<label class="field"><span>${block.type === "timeline" ? "Hechos de esta ficha" : supportsImage ? "Texto, leyenda o notas" : "Contenido editable"}</span><textarea class="textarea wiki-description-input" name="block_text_${index}" placeholder="${escapeAttr(type.placeholder)}">${escapeHtml(block.text || "")}</textarea></label>`}
   </article>`;
 }
 
@@ -2964,12 +3085,12 @@ function renderWikiModal(pageId) {
           <div class="wiki-form-columns">
             <div class="wiki-form-main">
               <label class="field wiki-title-field"><span>Nombre</span><input class="input wiki-title-input" name="title" value="${escapeAttr(page.title)}" placeholder="Ej: Aureon el Radiante" required /></label>
-              <label class="field"><span>Aliases <small>el nombre siempre cuenta como alias</small></span><div class="wiki-alias-editor"><em data-primary-alias>${escapeHtml(page.title || "Nombre de la ficha")}</em><input class="input" name="aliases" value="${escapeAttr(extraAliases.join(", "))}" placeholder="Sumá otros aliases separados por comas" /></div></label>
+              <label class="field"><span>Aliases <small>el nombre siempre cuenta como alias</small></span><div class="wiki-alias-editor"><em data-primary-alias>${escapeHtml(page.title || "Nombre de la ficha")}</em><div class="wiki-alias-chips" data-alias-list>${extraAliases.map(wikiAliasChip).join("")}</div><div class="wiki-alias-add"><input class="input" data-wiki-alias-input placeholder="Escribí un alias y agregalo" /><button type="button" data-action="add-wiki-alias">＋</button></div></div></label>
 
               <section class="wiki-editor-section">
                 <div class="wiki-editor-section-head"><div><span>PROPIEDADES</span><p>El icono, nombre y texto de cada propiedad son editables. Escribí el nombre de otra ficha para vincularla.</p></div></div>
                 <div class="wiki-property-editors" data-property-list>${properties.map(wikiPropertyEditorRow).join("")}</div>
-                <button class="wiki-add-property" type="button" data-action="add-wiki-property">＋ Añadir propiedad</button>
+                <div class="wiki-property-add"><button class="wiki-add-property" type="button" data-action="open-wiki-property-picker">＋ Añadir propiedad</button>${wikiPropertyPicker(type, properties)}</div>
               </section>
 
               <section class="wiki-editor-section wiki-content-section">
@@ -3150,7 +3271,7 @@ document.addEventListener("submit", async (event) => {
     if (contentBlocks === null) return;
     data.imageUrl = imageUrl;
     data.contentBlocks = contentBlocks;
-    saveWikiPage(data);
+    if (!(await saveWikiPage(data))) return;
     editing = null;
     wikiView = "cards";
     saveState();
@@ -3317,13 +3438,51 @@ document.addEventListener("click", async (event) => {
     if (dialog) dialog.hidden = true;
   }
 
-  if (action === "add-wiki-property") {
+  if (action === "add-wiki-alias") {
+    const editor = target.closest(".wiki-alias-editor");
+    const input = editor?.querySelector("[data-wiki-alias-input]");
+    const list = editor?.querySelector("[data-alias-list]");
+    const alias = String(input?.value || "").trim();
+    if (alias && list) {
+      const exists = [...list.querySelectorAll("input[name^='alias_']")].some((field) => normalizeSearchText(field.value) === normalizeSearchText(alias));
+      if (!exists) list.insertAdjacentHTML("beforeend", wikiAliasChip(alias, uid("alias")));
+      input.value = "";
+      input.focus();
+    }
+  }
+
+  if (action === "remove-wiki-alias") {
+    target.closest("[data-alias-chip]")?.remove();
+  }
+
+  if (action === "open-wiki-property-picker") {
+    const picker = target.closest(".wiki-property-add")?.querySelector("[data-property-picker]");
+    if (picker) picker.hidden = !picker.hidden;
+  }
+
+  if (action === "add-wiki-property-preset" || action === "add-wiki-property-custom") {
     const list = target.closest(".wiki-editor-section")?.querySelector("[data-property-list]");
-    if (list) list.insertAdjacentHTML("beforeend", wikiPropertyEditorRow({ id: uid("property"), icon: "◆", label: "", value: "" }, Date.now()));
+    const label = action === "add-wiki-property-preset" ? target.dataset.propertyLabel || "" : "";
+    const icon = action === "add-wiki-property-preset" ? target.dataset.propertyIcon || "◆" : "◆";
+    if (list) {
+      list.insertAdjacentHTML("beforeend", wikiPropertyEditorRow({ id: uid("property"), icon, label, value: "" }, Date.now()));
+      target.closest("[data-property-picker]")?.setAttribute("hidden", "");
+      list.lastElementChild?.querySelector(label ? "[name^='property_value_']" : "[name^='property_label_']")?.focus();
+    }
   }
 
   if (action === "remove-wiki-property") {
     target.closest("[data-property-row]")?.remove();
+  }
+
+  if (action === "select-wiki-property-icon") {
+    const row = target.closest("[data-property-row]");
+    const icon = target.dataset.propertyIcon || "◆";
+    const input = row?.querySelector("[data-property-icon-input]");
+    const preview = row?.querySelector("[data-property-icon-preview]");
+    if (input) input.value = icon;
+    if (preview) preview.innerHTML = renderWikiPropertyIcon(icon);
+    target.closest("details")?.removeAttribute("open");
   }
 
   if (action === "add-content-block") {
@@ -3461,6 +3620,12 @@ document.addEventListener("keydown", (event) => {
     render();
     return;
   }
+  const aliasInput = event.target.closest("[data-wiki-alias-input]");
+  if (aliasInput && event.key === "Enter") {
+    event.preventDefault();
+    aliasInput.closest(".wiki-alias-editor")?.querySelector('[data-action="add-wiki-alias"]')?.click();
+    return;
+  }
   const input = event.target.closest("[data-tag-input]");
   if (!input) return;
 
@@ -3524,6 +3689,22 @@ function refreshStatBlock5e(editor) {
 document.addEventListener("change", (event) => {
   const sheetEditor = event.target.closest("[data-5e-sheet-editor]");
   if (sheetEditor) refreshCharacterSheet5e(sheetEditor, event.target.matches("[data-5e-class]"));
+
+  const iconFileInput = event.target.closest("[data-property-icon-file]");
+  const iconFile = iconFileInput?.files?.[0];
+  if (iconFileInput) {
+    if (!iconFile || !iconFile.type.startsWith("image/")) {
+      showToast("Elegí una imagen para el icono.");
+      return;
+    }
+    const preview = iconFileInput.closest("[data-property-row]")?.querySelector("[data-property-icon-preview]");
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      if (preview) preview.innerHTML = renderWikiPropertyIcon(String(reader.result || ""));
+    });
+    reader.readAsDataURL(iconFile);
+    return;
+  }
 
   const fileInput = event.target.closest('.wiki-card-form input[name="imageFile"]');
   const file = fileInput?.files?.[0];
@@ -3860,14 +4041,18 @@ function createCampaign(data) {
   activeTab = "wiki";
 }
 
-function saveWikiPage(data) {
+async function saveWikiPage(data) {
   const campaign = campaignById(activeCampaignId);
   const existing = editing.id ? campaign.wiki.find((page) => page.id === editing.id) : null;
   const type = WIKI_CARD_TYPES[data.type] ? data.type : "nota";
-  const propertyItems = wikiPropertyItemsFromData(data);
+  const propertyItems = await wikiPropertyItemsFromData(data);
+  if (propertyItems === null) return false;
   const properties = Object.fromEntries(propertyItems.filter((item) => item.value).map((item) => [item.label, item.value]));
   const title = String(data.title || "").trim();
-  const aliases = [title, ...splitTags(data.aliases || "")]
+  const editorAliases = Object.entries(data)
+    .filter(([key]) => /^alias_/.test(key))
+    .map(([, value]) => String(value || "").trim());
+  const aliases = [title, ...editorAliases, ...splitTags(data.aliases || "")]
     .filter(Boolean)
     .filter((alias, index, list) => list.findIndex((candidate) => normalizeSearchText(candidate) === normalizeSearchText(alias)) === index);
   const contentBlocks = Array.isArray(data.contentBlocks) ? data.contentBlocks : [];
@@ -3903,19 +4088,38 @@ function saveWikiPage(data) {
     campaign.wiki.unshift({ id, createdAt: Date.now(), ...payload });
     selectedWikiCardId = id;
   }
+  return true;
 }
 
-function wikiPropertyItemsFromData(data) {
+async function wikiPropertyItemsFromData(data) {
   const indexes = Object.keys(data)
     .map((key) => key.match(/^property_label_(.+)$/)?.[1])
     .filter(Boolean)
     .sort((a, b) => Number(a) - Number(b));
-  return indexes.map((index) => ({
-    id: String(data[`property_id_${index}`] || uid("property")),
-    icon: String(data[`property_icon_${index}`] || "◆").trim() || "◆",
-    label: String(data[`property_label_${index}`] || "").trim(),
-    value: String(data[`property_value_${index}`] || "").trim(),
-  })).filter((item) => item.label);
+  const items = [];
+  for (const index of indexes) {
+    let icon = String(data[`property_icon_${index}`] || "◆").trim() || "◆";
+    const file = data[`property_icon_file_${index}`];
+    if (file instanceof File && file.size > 0) {
+      if (!file.type.startsWith("image/")) {
+        showToast("Elegí una imagen para el icono de la propiedad.");
+        return null;
+      }
+      if (file.size > 1024 * 1024) {
+        showToast("El icono debe pesar menos de 1 MB.");
+        return null;
+      }
+      try {
+        icon = await readFileAsDataUrl(file);
+      } catch {
+        showToast("No se pudo leer el icono de la propiedad.");
+        return null;
+      }
+    }
+    const label = String(data[`property_label_${index}`] || "").trim();
+    if (label) items.push({ id: String(data[`property_id_${index}`] || uid("property")), icon, label, value: String(data[`property_value_${index}`] || "").trim() });
+  }
+  return items;
 }
 
 function characterSheet5eFromData(data, index) {
