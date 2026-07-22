@@ -2057,6 +2057,195 @@ p {
   padding: 18px;
 }
 
+.wiki-content-statblock {
+  width: min(100%, 700px);
+}
+
+.dnd5e-statblock {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  overflow: hidden;
+  padding: 24px 24px 28px;
+  border: 1px solid #b99548;
+  border-block-width: 5px;
+  border-radius: 2px;
+  background:
+    linear-gradient(rgba(248, 239, 205, 0.94), rgba(246, 237, 207, 0.96)),
+    repeating-linear-gradient(8deg, rgba(121, 77, 35, 0.035) 0 1px, transparent 1px 7px);
+  color: #271c16;
+  font-family: Georgia, "Times New Roman", serif;
+  box-shadow: inset 0 0 45px rgba(132, 82, 34, 0.15), 0 14px 34px rgba(0, 0, 0, 0.26);
+}
+
+.dnd5e-statblock::before,
+.dnd5e-statblock::after {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #7d211b, #b13b28 70%, transparent);
+  content: "";
+}
+
+.dnd5e-statblock::before { top: 8px; }
+.dnd5e-statblock::after { bottom: 8px; }
+
+.dnd5e-statblock header h2 {
+  margin: 0;
+  color: #7d211b;
+  font-size: clamp(24px, 4vw, 34px);
+  font-variant: small-caps;
+  letter-spacing: 0.025em;
+  line-height: 1;
+}
+
+.dnd5e-statblock header p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.dnd5e-stat-rule {
+  height: 4px;
+  margin: 2px 0;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 8px 100%);
+  background: #9d2d20;
+}
+
+.dnd5e-statblock dl,
+.dnd5e-statblock dd {
+  margin: 0;
+}
+
+.dnd5e-statblock-vitals,
+.dnd5e-statblock-details {
+  display: grid;
+  gap: 3px;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.dnd5e-statblock-vitals > div,
+.dnd5e-statblock-details > div {
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+}
+
+.dnd5e-statblock dt {
+  color: #6f201a;
+  font-weight: 800;
+}
+
+.dnd5e-statblock-abilities {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+  text-align: center;
+}
+
+.dnd5e-statblock-abilities div {
+  display: grid;
+  gap: 2px;
+}
+
+.dnd5e-statblock-abilities b {
+  color: #7d211b;
+  font-size: 13px;
+}
+
+.dnd5e-statblock-abilities span {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.dnd5e-statblock-section {
+  margin-top: 5px;
+}
+
+.dnd5e-statblock-section h3 {
+  margin: 0 0 6px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid #a74635;
+  color: #7d211b;
+  font-size: 21px;
+  font-variant: small-caps;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+}
+
+.dnd5e-statblock-section div {
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.dnd5e-statblock .wiki-inline-link {
+  border-bottom-color: rgba(125, 33, 27, 0.4);
+  color: #6f201a;
+  font-weight: 700;
+}
+
+.dnd5e-stat-editor {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(181, 148, 81, 0.3);
+  border-radius: 8px;
+  background: rgba(181, 148, 81, 0.045);
+}
+
+.dnd5e-stat-editor-note {
+  margin: 0;
+  color: #b9aa8c;
+  font-size: 11px;
+}
+
+.dnd5e-stat-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dnd5e-stat-wide { grid-column: 1 / -1; }
+
+.dnd5e-stat-editor-abilities {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  padding-block: 12px;
+  border-block: 2px solid rgba(157, 45, 32, 0.65);
+}
+
+.dnd5e-stat-editor-abilities label {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  color: #c9897d;
+  font: 800 10px var(--mono);
+}
+
+.dnd5e-stat-editor-abilities input {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #e5e8e7;
+  text-align: center;
+}
+
+.dnd5e-stat-editor-abilities output {
+  color: #b7bdbc;
+  font-size: 11px;
+}
+
+.dnd5e-stat-prose {
+  min-height: 90px;
+  resize: vertical;
+}
+
 .dnd5e-sheet {
   min-width: 760px;
   padding: 18px;
@@ -4141,6 +4330,23 @@ p {
 
   .dnd5e-weapon-editor-row {
     padding-right: 30px;
+  }
+
+  .dnd5e-statblock {
+    padding-inline: 16px;
+  }
+
+  .dnd5e-statblock-abilities,
+  .dnd5e-stat-editor-abilities {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .dnd5e-stat-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dnd5e-stat-wide {
+    grid-column: auto;
   }
 
   .public-page-image,

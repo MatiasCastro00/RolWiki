@@ -1079,6 +1079,38 @@ function signedDnd5e(value) {
   return number >= 0 ? `+${number}` : String(number);
 }
 
+function defaultStatBlock5e() {
+  return {
+    subtitle: "Criatura Mediana, sin alineamiento",
+    armorClass: "10",
+    hitPoints: "1 (1d8 - 3)",
+    speed: "30 pies",
+    abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
+    savingThrows: "",
+    skills: "",
+    senses: "Percepcion pasiva 10",
+    languages: "—",
+    challenge: "0 (10 PX)",
+    traits: "",
+    actions: "",
+    reactions: "",
+  };
+}
+
+function normalizedStatBlock5e(block) {
+  const defaults = defaultStatBlock5e();
+  const stat = block?.stat && typeof block.stat === "object" ? block.stat : {};
+  return {
+    ...defaults,
+    ...stat,
+    abilities: Object.fromEntries(DND5E_ABILITIES.map(([key]) => [
+      key,
+      Math.max(1, Math.min(30, Number(stat.abilities?.[key]) || 10)),
+    ])),
+    traits: String(stat.traits || (!block?.stat ? block?.text || "" : "")),
+  };
+}
+
 function defaultCharacterSheet5e() {
   return {
     characterName: "", className: "", level: 1, background: "", playerName: "", race: "", alignment: "", experience: "",
@@ -1132,6 +1164,7 @@ function normalizedWikiContentBlocks(page) {
       text: String(block.text || ""),
       url: String(block.url || ""),
       sheet: block.type === "characterSheet5e" ? normalizedCharacterSheet5e(block) : undefined,
+      stat: block.type === "statBlock5e" ? normalizedStatBlock5e(block) : undefined,
     }));
   }
   const legacyText = String(page?.description ?? page?.content ?? "");
@@ -1744,7 +1777,131 @@ function dnd5eSpellNotes(name) {
     "True Resurrection": "Devuelve a la vida con restauracion completa, incluso sin cuerpo si se cumplen condiciones.",
     "Wish": "El conjuro mas flexible: replica conjuros o produce efectos excepcionales con riesgo a criterio del DM.",
   };
-  return notes[name] || "Descripcion breve pendiente. Completa alcance, componentes, tirada o salvacion y efecto en tu mesa.";
+  const mechanics = {
+    "Acid Splash": "Dano: 1d6 acido. Mejora como truco a 2d6 nivel 5, 3d6 nivel 11 y 4d6 nivel 17.",
+    "Blade Ward": "Dano: sin dano directo. Mejora: no escala con nivel.",
+    "Chill Touch": "Dano: 1d8 necrotico. Mejora como truco a 2d8 nivel 5, 3d8 nivel 11 y 4d8 nivel 17.",
+    "Dancing Lights": "Dano: sin dano directo. Mejora: no escala con nivel.",
+    "Druidcraft": "Dano: sin dano directo. Mejora: no escala con nivel.",
+    "Eldritch Blast": "Dano: 1d10 fuerza por rayo. Mejora como truco: 2 rayos nivel 5, 3 nivel 11 y 4 nivel 17.",
+    "Fire Bolt": "Dano: 1d10 fuego. Mejora como truco a 2d10 nivel 5, 3d10 nivel 11 y 4d10 nivel 17.",
+    "Guidance": "Dano: sin dano directo. Bono: +1d4 a una prueba. Mejora: no escala con nivel.",
+    "Light": "Dano: sin dano directo. Mejora: no escala con nivel.",
+    "Mage Hand": "Dano: sin dano directo. Mejora: no escala con nivel.",
+    "Mending": "Dano: sin dano directo. Mejora: no escala con nivel.",
+    "Minor Illusion": "Dano: sin dano directo. Mejora: no escala con nivel.",
+    "Poison Spray": "Dano: 1d12 veneno. Mejora como truco a 2d12 nivel 5, 3d12 nivel 11 y 4d12 nivel 17.",
+    "Prestidigitation": "Dano: sin dano directo. Mejora: no escala con nivel.",
+    "Produce Flame": "Dano: 1d8 fuego si se lanza como ataque. Mejora como truco a 2d8 nivel 5, 3d8 nivel 11 y 4d8 nivel 17.",
+    "Ray of Frost": "Dano: 1d8 frio. Mejora como truco a 2d8 nivel 5, 3d8 nivel 11 y 4d8 nivel 17.",
+    "Resistance": "Dano: sin dano directo. Bono: +1d4 a una salvacion. Mejora: no escala con nivel.",
+    "Sacred Flame": "Dano: 1d8 radiante. Mejora como truco a 2d8 nivel 5, 3d8 nivel 11 y 4d8 nivel 17.",
+    "Shillelagh": "Dano: el arma usa 1d8 y tu caracteristica magica. Mejora: no escala con nivel.",
+    "Shocking Grasp": "Dano: 1d8 relampago. Mejora como truco a 2d8 nivel 5, 3d8 nivel 11 y 4d8 nivel 17.",
+    "Spare the Dying": "Dano: sin dano directo. Mejora: no escala con nivel.",
+    "Thaumaturgy": "Dano: sin dano directo. Mejora: no escala con nivel.",
+    "True Strike": "Dano: sin dano directo. Mejora: no escala con nivel.",
+    "Alarm": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Animal Friendship": "Dano: sin dano directo. A mayor nivel: +1 bestia objetivo por cada slot superior.",
+    "Bane": "Dano: sin dano directo. Penaliza 1d4. A mayor nivel: +1 criatura objetivo por cada slot superior.",
+    "Bless": "Dano: sin dano directo. Bono: +1d4. A mayor nivel: +1 criatura objetivo por cada slot superior.",
+    "Burning Hands": "Dano: 3d6 fuego en cono. A mayor nivel: +1d6 por cada slot superior.",
+    "Charm Person": "Dano: sin dano directo. A mayor nivel: +1 criatura objetivo por cada slot superior.",
+    "Cure Wounds": "Curacion: 1d8 + modificador magico. A mayor nivel: +1d8 por cada slot superior.",
+    "Detect Magic": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Disguise Self": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Entangle": "Dano: sin dano directo. Controla area con salvacion de Fuerza. A mayor nivel: no gana efecto por slot superior.",
+    "Faerie Fire": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Feather Fall": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Find Familiar": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Guiding Bolt": "Dano: 4d6 radiante. A mayor nivel: +1d6 por cada slot superior.",
+    "Healing Word": "Curacion: 1d4 + modificador magico. A mayor nivel: +1d4 por cada slot superior.",
+    "Hex": "Dano: +1d6 necrotico cuando golpeas al objetivo. A mayor nivel: aumenta duracion, no los dados.",
+    "Identify": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Mage Armor": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Magic Missile": "Dano: 3 dardos de 1d4+1 fuerza. A mayor nivel: +1 dardo por cada slot superior.",
+    "Shield": "Dano: sin dano directo. Defensa: +5 CA hasta tu siguiente turno. A mayor nivel: no gana efecto por slot superior.",
+    "Sleep": "Afecta 5d8 puntos de golpe. A mayor nivel: +2d8 por cada slot superior.",
+    "Thunderwave": "Dano: 2d8 trueno. A mayor nivel: +1d8 por cada slot superior.",
+    "Aid": "Aumenta PG maximos y actuales en 5. A mayor nivel: +5 PG por cada slot superior.",
+    "Alter Self": "Dano: armas naturales 1d6. A mayor nivel: no gana efecto por slot superior.",
+    "Barkskin": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Blur": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Calm Emotions": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Darkness": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Enhance Ability": "Dano: sin dano directo. A mayor nivel: +1 criatura objetivo por cada slot superior.",
+    "Flaming Sphere": "Dano: 2d6 fuego. A mayor nivel: +1d6 por cada slot superior.",
+    "Hold Person": "Dano: sin dano directo. A mayor nivel: +1 humanoide objetivo por cada slot superior.",
+    "Invisibility": "Dano: sin dano directo. A mayor nivel: +1 criatura objetivo por cada slot superior.",
+    "Lesser Restoration": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Moonbeam": "Dano: 2d10 radiante. A mayor nivel: +1d10 por cada slot superior.",
+    "Misty Step": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Pass without Trace": "Dano: sin dano directo. Bono: +10 a Sigilo. A mayor nivel: no gana efecto por slot superior.",
+    "Scorching Ray": "Dano: 3 rayos de 2d6 fuego. A mayor nivel: +1 rayo por cada slot superior.",
+    "Silence": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Spiritual Weapon": "Dano: 1d8 fuerza + modificador magico. A mayor nivel: +1d8 por cada 2 niveles de slot superiores.",
+    "Web": "Dano: sin dano directo. Controla y puede restringir. A mayor nivel: no gana efecto por slot superior.",
+    "Counterspell": "Dano: sin dano directo. A mayor nivel: interrumpe automaticamente conjuros de nivel igual o menor al slot usado.",
+    "Dispel Magic": "Dano: sin dano directo. A mayor nivel: disipa automaticamente efectos de nivel igual o menor al slot usado.",
+    "Fear": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Fireball": "Dano: 8d6 fuego. A mayor nivel: +1d6 por cada slot superior.",
+    "Fly": "Dano: sin dano directo. A mayor nivel: +1 criatura objetivo por cada slot superior.",
+    "Haste": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Lightning Bolt": "Dano: 8d6 relampago. A mayor nivel: +1d6 por cada slot superior.",
+    "Mass Healing Word": "Curacion: 1d4 + modificador magico a varias criaturas. A mayor nivel: +1d4 por cada slot superior.",
+    "Plant Growth": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Revivify": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Spirit Guardians": "Dano: 3d8 radiante o necrotico. A mayor nivel: +1d8 por cada slot superior.",
+    "Tiny Hut": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Water Breathing": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Banishment": "Dano: sin dano directo. A mayor nivel: +1 criatura objetivo por cada slot superior.",
+    "Blight": "Dano: 8d8 necrotico. A mayor nivel: +1d8 por cada slot superior.",
+    "Confusion": "Dano: sin dano directo. A mayor nivel: aumenta el radio del area.",
+    "Dimension Door": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Freedom of Movement": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Greater Invisibility": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Polymorph": "Dano: depende de la forma elegida. A mayor nivel: no gana efecto por slot superior.",
+    "Wall of Fire": "Dano: 5d8 fuego. A mayor nivel: +1d8 por cada slot superior.",
+    "Cloudkill": "Dano: 5d8 veneno. A mayor nivel: +1d8 por cada slot superior.",
+    "Commune": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Cone of Cold": "Dano: 8d8 frio. A mayor nivel: +1d8 por cada slot superior.",
+    "Dominate Person": "Dano: sin dano directo. A mayor nivel: aumenta la duracion.",
+    "Flame Strike": "Dano: 4d6 fuego + 4d6 radiante. A mayor nivel: +1d6 fuego o radiante por cada slot superior.",
+    "Greater Restoration": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Mass Cure Wounds": "Curacion: 3d8 + modificador magico a varias criaturas. A mayor nivel: +1d8 por cada slot superior.",
+    "Raise Dead": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Scrying": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Wall of Stone": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Chain Lightning": "Dano: 10d8 relampago. A mayor nivel: +1 objetivo secundario por cada slot superior.",
+    "Disintegrate": "Dano: 10d6 + 40 fuerza. A mayor nivel: +3d6 por cada slot superior.",
+    "Globe of Invulnerability": "Dano: sin dano directo. A mayor nivel: bloquea conjuros de nivel mas alto segun el slot usado.",
+    "Heal": "Curacion: 70 PG. A mayor nivel: +10 PG por cada slot superior.",
+    "Heroes' Feast": "Dano: sin dano directo. Beneficio: +2d10 PG maximos. A mayor nivel: no gana efecto por slot superior.",
+    "Mass Suggestion": "Dano: sin dano directo. A mayor nivel: aumenta la duracion.",
+    "Sunbeam": "Dano: 6d8 radiante. A mayor nivel: no gana efecto por slot superior.",
+    "Teleport": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Fire Storm": "Dano: 7d10 fuego. A mayor nivel: no gana efecto por slot superior.",
+    "Plane Shift": "Dano: sin dano directo. Puede desterrar con ataque y salvacion. A mayor nivel: no gana efecto por slot superior.",
+    "Regenerate": "Curacion: 4d8 + 15 inicial y luego recuperacion continua. A mayor nivel: no gana efecto por slot superior.",
+    "Resurrection": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Reverse Gravity": "Dano: por caida segun altura y entorno. A mayor nivel: no gana efecto por slot superior.",
+    "Dominate Monster": "Dano: sin dano directo. A mayor nivel: aumenta la duracion.",
+    "Earthquake": "Dano: variable por grietas, caidas y estructuras. A mayor nivel: no gana efecto por slot superior.",
+    "Holy Aura": "Dano: sin dano directo. Puede cegar a atacantes concretos. A mayor nivel: no gana efecto por slot superior.",
+    "Power Word Stun": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Sunburst": "Dano: 12d6 radiante. A mayor nivel: no gana efecto por slot superior.",
+    "Astral Projection": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Foresight": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Gate": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Mass Heal": "Curacion: reparte 700 PG. A mayor nivel: no gana efecto por slot superior.",
+    "Meteor Swarm": "Dano: 20d6 fuego + 20d6 contundente. A mayor nivel: no gana efecto por slot superior.",
+    "Power Word Kill": "Dano: no tira dados; mata si el objetivo esta bajo el umbral de PG. A mayor nivel: no gana efecto por slot superior.",
+    "Time Stop": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "True Resurrection": "Dano: sin dano directo. A mayor nivel: no gana efecto por slot superior.",
+    "Wish": "Dano/curacion: variable segun el efecto elegido. A mayor nivel: no aplica, es de nivel 9.",
+  };
+  const description = notes[name] || "Descripcion breve pendiente. Completa alcance, componentes, tirada o salvacion y efecto en tu mesa.";
+  return mechanics[name] ? `${description}\n${mechanics[name]}` : description;
 }
 
 function dnd5eSpellPicker(index, level) {
@@ -1841,6 +1998,41 @@ function renderCharacterSheet5e(block) {
   </div>`;
 }
 
+function renderStatBlock5e(block, cards, currentId) {
+  const stat = normalizedStatBlock5e(block);
+  const detailRows = [
+    ["Tiradas de salvacion", stat.savingThrows],
+    ["Habilidades", stat.skills],
+    ["Sentidos", stat.senses],
+    ["Idiomas", stat.languages],
+    ["Desafio", stat.challenge],
+  ].filter(([, value]) => String(value || "").trim());
+  const proseSection = (title, value) => String(value || "").trim()
+    ? `<section class="dnd5e-statblock-section"><h3>${title}</h3><div>${linkMentions(value, cards, currentId)}</div></section>`
+    : "";
+  return `<article class="dnd5e-statblock">
+    <header>
+      <h2>${escapeHtml(block.title || "Criatura sin nombre")}</h2>
+      <p>${escapeHtml(stat.subtitle)}</p>
+    </header>
+    <div class="dnd5e-stat-rule"></div>
+    <dl class="dnd5e-statblock-vitals">
+      <div><dt>Clase de Armadura</dt><dd>${escapeHtml(stat.armorClass)}</dd></div>
+      <div><dt>Puntos de Golpe</dt><dd>${escapeHtml(stat.hitPoints)}</dd></div>
+      <div><dt>Velocidad</dt><dd>${escapeHtml(stat.speed)}</dd></div>
+    </dl>
+    <div class="dnd5e-stat-rule"></div>
+    <div class="dnd5e-statblock-abilities">
+      ${DND5E_ABILITIES.map(([key, , short]) => `<div><b>${short}</b><span>${stat.abilities[key]} (${signedDnd5e(dnd5eModifier(stat.abilities[key]))})</span></div>`).join("")}
+    </div>
+    <div class="dnd5e-stat-rule"></div>
+    ${detailRows.length ? `<dl class="dnd5e-statblock-details">${detailRows.map(([label, value]) => `<div><dt>${label}</dt><dd>${linkMentions(value, cards, currentId)}</dd></div>`).join("")}</dl>` : ""}
+    ${proseSection("Rasgos", stat.traits)}
+    ${proseSection("Acciones", stat.actions)}
+    ${proseSection("Reacciones", stat.reactions)}
+  </article>`;
+}
+
 function renderWikiContentBlock(block, cards, currentId) {
   const type = WIKI_CONTENT_TYPES[block.type] || WIKI_CONTENT_TYPES.text;
   const title = escapeHtml(block.title || type.title);
@@ -1863,7 +2055,7 @@ function renderWikiContentBlock(block, cards, currentId) {
     return `<section class="wiki-content-block wiki-content-sheet wiki-content-character-sheet"><div class="wiki-content-heading"><span>${type.icon} ${escapeHtml(type.label.toUpperCase())}</span><h2>${title}</h2></div>${renderCharacterSheet5e(block)}</section>`;
   }
   if (block.type === "statBlock5e") {
-    return `<section class="wiki-content-block wiki-content-sheet"><div class="wiki-content-heading"><span>${type.icon} ${escapeHtml(type.label.toUpperCase())}</span><h2>${title}</h2></div><div class="wiki-sheet-copy">${text || "Completá esta hoja desde el editor."}</div></section>`;
+    return `<section class="wiki-content-block wiki-content-statblock">${renderStatBlock5e(block, cards, currentId)}</section>`;
   }
   return `<section class="wiki-content-block wiki-description"><div class="wiki-content-heading"><span>${type.icon} ${escapeHtml(type.label.toUpperCase())}</span><h2>${title}</h2></div><p>${text || "Sin texto todavía."}</p></section>`;
 }
@@ -2692,6 +2884,32 @@ function characterSheet5eEditor(block, index) {
   </div>`;
 }
 
+function statBlock5eEditor(block, index) {
+  const stat = normalizedStatBlock5e(block);
+  const name = (field) => `block_stat_${index}_${field}`;
+  const value = (field) => escapeAttr(stat[field] || "");
+  return `<div class="dnd5e-stat-editor" data-5e-stat-editor>
+    <p class="dnd5e-stat-editor-note">El titulo del bloque es el nombre de la criatura. Los modificadores se calculan automaticamente.</p>
+    <div class="dnd5e-stat-editor-grid">
+      <label class="field dnd5e-stat-wide"><span>Tipo, tamano y alineamiento</span><input class="input" name="${name("subtitle")}" value="${value("subtitle")}" placeholder="Humanoide Mediano, neutral bueno" /></label>
+      <label class="field"><span>Clase de Armadura</span><input class="input" name="${name("armorClass")}" value="${value("armorClass")}" placeholder="12" /></label>
+      <label class="field"><span>Puntos de Golpe</span><input class="input" name="${name("hitPoints")}" value="${value("hitPoints")}" placeholder="13 (3d8)" /></label>
+      <label class="field"><span>Velocidad</span><input class="input" name="${name("speed")}" value="${value("speed")}" placeholder="20 pies, vuelo 50 pies" /></label>
+    </div>
+    <div class="dnd5e-stat-editor-abilities">
+      ${DND5E_ABILITIES.map(([key, label, short]) => `<label><span>${short}</span><input data-5e-stat-ability="${key}" name="${name(`ability_${key}`)}" type="number" min="1" max="30" value="${stat.abilities[key]}" aria-label="${label}" /><output data-5e-stat-modifier="${key}">${signedDnd5e(dnd5eModifier(stat.abilities[key]))}</output></label>`).join("")}
+    </div>
+    <div class="dnd5e-stat-editor-grid">
+      <label class="field"><span>Tiradas de salvacion</span><input class="input" name="${name("savingThrows")}" value="${value("savingThrows")}" placeholder="DES +4, SAB +3" /></label>
+      <label class="field"><span>Habilidades</span><input class="input" name="${name("skills")}" value="${value("skills")}" placeholder="Percepcion +5" /></label>
+      <label class="field"><span>Sentidos</span><input class="input" name="${name("senses")}" value="${value("senses")}" placeholder="Vision en la oscuridad 60 pies, Percepcion pasiva 15" /></label>
+      <label class="field"><span>Idiomas</span><input class="input" name="${name("languages")}" value="${value("languages")}" placeholder="Comun, Auran" /></label>
+      <label class="field dnd5e-stat-wide"><span>Desafio</span><input class="input" name="${name("challenge")}" value="${value("challenge")}" placeholder="1/4 (50 PX)" /></label>
+    </div>
+    ${[["traits", "Rasgos", "Ataque en picado. Si la criatura vuela..."], ["actions", "Acciones", "Garra. Ataque de arma cuerpo a cuerpo..."], ["reactions", "Reacciones", "Reaccion y su efecto..."]].map(([field, label, placeholder]) => `<label class="field"><span>${label}</span><textarea class="textarea dnd5e-stat-prose" name="${name(field)}" placeholder="${placeholder}">${escapeHtml(stat[field] || "")}</textarea></label>`).join("")}
+  </div>`;
+}
+
 function wikiContentEditorBlock(block, index) {
   const type = WIKI_CONTENT_TYPES[block.type] || WIKI_CONTENT_TYPES.text;
   const supportsImage = block.type === "image" || block.type === "map";
@@ -2699,13 +2917,13 @@ function wikiContentEditorBlock(block, index) {
     <input type="hidden" name="block_id_${index}" value="${escapeAttr(block.id || uid("block"))}" />
     <input type="hidden" name="block_type_${index}" value="${escapeAttr(block.type)}" />
     <header><span>${type.icon} ${escapeHtml(type.label)}</span><button type="button" data-action="remove-content-block" aria-label="Quitar bloque">×</button></header>
-    <label class="field"><span>Título editable</span><input class="input wiki-block-title" name="block_title_${index}" value="${escapeAttr(block.title || type.title)}" placeholder="Título de la sección" /></label>
-    ${block.type === "characterSheet5e" ? characterSheet5eEditor(block, index) : supportsImage ? `<div class="wiki-block-media-fields">
+    <label class="field"><span>${block.type === "statBlock5e" ? "Nombre de la criatura" : "Título editable"}</span><input class="input wiki-block-title" name="block_title_${index}" value="${escapeAttr(block.title || type.title)}" placeholder="${block.type === "statBlock5e" ? "Nombre de la criatura" : "Título de la sección"}" /></label>
+    ${block.type === "characterSheet5e" ? characterSheet5eEditor(block, index) : block.type === "statBlock5e" ? statBlock5eEditor(block, index) : supportsImage ? `<div class="wiki-block-media-fields">
       <label class="field"><span>URL de imagen</span><input class="input" name="block_url_${index}" type="url" value="${escapeAttr(String(block.url || "").startsWith("data:") ? "" : block.url || "")}" placeholder="https://..." /></label>
       <label class="field"><span>o subir archivo</span><input class="input" name="block_file_${index}" type="file" accept="image/*" /></label>
       <input type="hidden" name="block_existing_url_${index}" value="${escapeAttr(block.url || "")}" />
     </div>` : `<input type="hidden" name="block_url_${index}" value="" />`}
-    ${block.type === "characterSheet5e" ? "" : `<label class="field"><span>${supportsImage ? "Texto, leyenda o notas" : "Contenido editable"}</span><textarea class="textarea wiki-description-input" name="block_text_${index}" placeholder="${escapeAttr(type.placeholder)}">${escapeHtml(block.text || "")}</textarea></label>`}
+    ${block.type === "characterSheet5e" || block.type === "statBlock5e" ? `<input type="hidden" name="block_text_${index}" value="" />` : `<label class="field"><span>${supportsImage ? "Texto, leyenda o notas" : "Contenido editable"}</span><textarea class="textarea wiki-description-input" name="block_text_${index}" placeholder="${escapeAttr(type.placeholder)}">${escapeHtml(block.text || "")}</textarea></label>`}
   </article>`;
 }
 
@@ -3295,6 +3513,14 @@ function refreshCharacterSheet5e(editor, inferClassSaves = false) {
   if (spellAttackOutput) spellAttackOutput.textContent = signedDnd5e(proficiency + modifier(spellAbility));
 }
 
+function refreshStatBlock5e(editor) {
+  DND5E_ABILITIES.forEach(([key]) => {
+    const score = Number(editor.querySelector(`[data-5e-stat-ability="${key}"]`)?.value) || 10;
+    const output = editor.querySelector(`[data-5e-stat-modifier="${key}"]`);
+    if (output) output.textContent = signedDnd5e(dnd5eModifier(score));
+  });
+}
+
 document.addEventListener("change", (event) => {
   const sheetEditor = event.target.closest("[data-5e-sheet-editor]");
   if (sheetEditor) refreshCharacterSheet5e(sheetEditor, event.target.matches("[data-5e-class]"));
@@ -3315,6 +3541,8 @@ document.addEventListener("change", (event) => {
 document.addEventListener("input", (event) => {
   const sheetEditor = event.target.closest("[data-5e-sheet-editor]");
   if (sheetEditor) refreshCharacterSheet5e(sheetEditor);
+  const statEditor = event.target.closest("[data-5e-stat-editor]");
+  if (statEditor) refreshStatBlock5e(statEditor);
 
   const titleInput = event.target.closest('.wiki-card-form input[name="title"]');
   if (titleInput) {
@@ -3756,6 +3984,28 @@ function characterSheet5eFromData(data, index) {
   });
 }
 
+function statBlock5eFromData(data, index) {
+  const field = (key) => data[`block_stat_${index}_${key}`];
+  return normalizedStatBlock5e({
+    type: "statBlock5e",
+    stat: {
+      subtitle: String(field("subtitle") || "").trim(),
+      armorClass: String(field("armorClass") || "").trim(),
+      hitPoints: String(field("hitPoints") || "").trim(),
+      speed: String(field("speed") || "").trim(),
+      abilities: Object.fromEntries(DND5E_ABILITIES.map(([key]) => [key, Number(field(`ability_${key}`)) || 10])),
+      savingThrows: String(field("savingThrows") || "").trim(),
+      skills: String(field("skills") || "").trim(),
+      senses: String(field("senses") || "").trim(),
+      languages: String(field("languages") || "").trim(),
+      challenge: String(field("challenge") || "").trim(),
+      traits: String(field("traits") || "").trim(),
+      actions: String(field("actions") || "").trim(),
+      reactions: String(field("reactions") || "").trim(),
+    },
+  });
+}
+
 async function wikiContentBlocksFromData(data) {
   const indexes = Object.keys(data)
     .map((key) => key.match(/^block_type_(.+)$/)?.[1])
@@ -3789,6 +4039,7 @@ async function wikiContentBlocksFromData(data) {
       text: String(data[`block_text_${index}`] || "").trim(),
       url,
       sheet: type === "characterSheet5e" ? characterSheet5eFromData(data, index) : undefined,
+      stat: type === "statBlock5e" ? statBlock5eFromData(data, index) : undefined,
     });
   }
   return blocks;
