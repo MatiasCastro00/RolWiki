@@ -1620,6 +1620,133 @@ function dnd5eSpellLibraryByLevel(level) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+function dnd5eSpellNotes(name) {
+  const notes = {
+    "Acid Splash": "Ataque menor de acido contra una o dos criaturas cercanas. Requiere salvacion de Destreza y causa dano de acido.",
+    "Blade Ward": "Te proteges hasta tu proximo turno y reduces el dano fisico de armas que recibas.",
+    "Chill Touch": "Ataque magico a distancia con energia necrotica. Dificulta que el objetivo recupere puntos de golpe por un turno.",
+    "Dancing Lights": "Crea luces pequenas que puedes mover para iluminar, senalar o distraer.",
+    "Druidcraft": "Efectos naturales menores: predecir clima, abrir flores, crear sensaciones o pequenas marcas de la naturaleza.",
+    "Eldritch Blast": "Ataque magico a distancia de fuerza. Es el truco ofensivo clasico del brujo y escala con el nivel.",
+    "Fire Bolt": "Ataque magico a distancia que lanza fuego y puede prender objetos inflamables no llevados.",
+    "Guidance": "Tocas a una criatura y le das un pequeno bono a una prueba de caracteristica.",
+    "Light": "Un objeto emite luz brillante y tenue durante un tiempo.",
+    "Mage Hand": "Crea una mano espectral para manipular objetos ligeros a distancia.",
+    "Mending": "Repara una rotura o rasgadura pequena en un objeto.",
+    "Minor Illusion": "Crea un sonido o una imagen pequena para enganar, distraer o ambientar una escena.",
+    "Poison Spray": "Una criatura cercana debe resistir veneno o recibe dano de veneno.",
+    "Prestidigitation": "Trucos magicos menores: limpiar, ensuciar, calentar, enfriar, aromatizar o crear pequenos efectos sensoriales.",
+    "Produce Flame": "Creas fuego en la mano para iluminar o lanzarlo como ataque de fuego.",
+    "Ray of Frost": "Ataque magico a distancia de frio. Reduce la velocidad del objetivo por un turno.",
+    "Resistance": "Tocas a una criatura y le das un pequeno bono a una tirada de salvacion.",
+    "Sacred Flame": "Luz sagrada golpea a una criatura. Requiere salvacion de Destreza y causa dano radiante.",
+    "Shillelagh": "Imbuyes un baston o garrote para atacar usando tu caracteristica magica y mejorar su dano.",
+    "Shocking Grasp": "Ataque magico cuerpo a cuerpo de relampago. Puede impedir reacciones del objetivo por un turno.",
+    "Spare the Dying": "Estabiliza a una criatura moribunda a toque.",
+    "Thaumaturgy": "Manifestaciones divinas menores: voz potente, temblores, puertas que se abren, luces o senales dramaticas.",
+    "True Strike": "Te concentras en un objetivo para preparar un ataque con ventaja en tu siguiente turno.",
+    "Alarm": "Protege una zona y te avisa cuando una criatura entra.",
+    "Animal Friendship": "Intentas calmar o encantar a una bestia para que no te ataque.",
+    "Bane": "Varios enemigos hacen salvacion de Carisma; si fallan, restan a ataques y salvaciones.",
+    "Bless": "Varios aliados suman un bono a ataques y tiradas de salvacion.",
+    "Burning Hands": "Cono de fuego desde tus manos. Requiere salvacion de Destreza y causa dano de fuego.",
+    "Charm Person": "Intentas encantar a un humanoide para que te trate amistosamente.",
+    "Cure Wounds": "Curas puntos de golpe a una criatura que tocas.",
+    "Detect Magic": "Percibes magia cercana y puedes identificar su escuela si la ves.",
+    "Disguise Self": "Cambias tu apariencia con una ilusion durante un tiempo.",
+    "Entangle": "Plantas y raices dificultan un area. Puede apresar criaturas con salvacion de Fuerza.",
+    "Faerie Fire": "Marca criaturas u objetos con luz. Los ataques contra criaturas afectadas tienen ventaja.",
+    "Feather Fall": "Varias criaturas caen lentamente y evitan o reducen el peligro de una caida.",
+    "Find Familiar": "Invocas un familiar espiritual con forma animal que puede ayudarte y explorar.",
+    "Guiding Bolt": "Ataque magico a distancia de dano radiante. El siguiente ataque contra el objetivo gana ventaja.",
+    "Healing Word": "Curas a distancia con una palabra magica como accion adicional.",
+    "Hex": "Maldices a una criatura: tus ataques le hacen dano extra y eliges una caracteristica para perjudicar.",
+    "Identify": "Aprendes propiedades magicas de un objeto o efecto que examinas.",
+    "Mage Armor": "Una criatura sin armadura obtiene una clase de armadura base magica.",
+    "Magic Missile": "Proyectiles de fuerza que impactan automaticamente contra uno o varios objetivos.",
+    "Shield": "Reaccion defensiva que sube mucho tu CA hasta tu siguiente turno y bloquea Magic Missile.",
+    "Sleep": "Duerme criaturas en un area segun sus puntos de golpe actuales.",
+    "Thunderwave": "Onda de trueno en area cercana. Empuja y causa dano de trueno si fallan salvacion.",
+    "Aid": "Aumenta temporalmente los puntos de golpe maximos y actuales de varios aliados.",
+    "Alter Self": "Cambias tu cuerpo para adaptarte: respiracion acuatica, apariencia o armas naturales.",
+    "Barkskin": "La piel de una criatura se endurece y mantiene una CA minima mientras dure.",
+    "Blur": "Tu imagen se distorsiona y dificulta que te acierten ataques.",
+    "Calm Emotions": "Suprime miedo/encanto o calma hostilidad en un grupo.",
+    "Darkness": "Crea oscuridad magica que bloquea vision normal y muchas luces.",
+    "Enhance Ability": "Da ventaja en pruebas de una caracteristica y un beneficio menor relacionado.",
+    "Flaming Sphere": "Esfera de fuego movil que dana criaturas cercanas o impactadas.",
+    "Hold Person": "Paraliza a un humanoide si falla salvacion de Sabiduria.",
+    "Invisibility": "Vuelve invisible a una criatura hasta que ataque, lance un conjuro ofensivo o termine el efecto.",
+    "Lesser Restoration": "Elimina una condicion o enfermedad comun de una criatura.",
+    "Moonbeam": "Columna de luz que dana a criaturas en el area y afecta especialmente a cambiaformas.",
+    "Misty Step": "Te teletransportas una distancia corta a un espacio que puedas ver como accion adicional.",
+    "Pass without Trace": "Tu grupo recibe un gran bono a Sigilo y deja menos rastros.",
+    "Scorching Ray": "Lanzas varios rayos de fuego como ataques magicos a distancia.",
+    "Silence": "Crea una zona donde no hay sonido; impide conjuros con componente verbal dentro.",
+    "Spiritual Weapon": "Creas un arma magica flotante que ataca como accion adicional.",
+    "Web": "Llena un area de telaranas dificiles de atravesar; puede restringir criaturas.",
+    "Counterspell": "Reaccion para intentar interrumpir un conjuro que otra criatura esta lanzando.",
+    "Dispel Magic": "Termina efectos magicos activos sobre una criatura, objeto o zona.",
+    "Fear": "Cono de terror; criaturas que fallan salvacion sueltan objetos y huyen.",
+    "Fireball": "Explosion de fuego en area grande. Requiere salvacion de Destreza.",
+    "Fly": "Una criatura obtiene velocidad de vuelo mientras dure el conjuro.",
+    "Haste": "Acelera a una criatura: mas velocidad, defensa y una accion limitada extra.",
+    "Lightning Bolt": "Linea de relampago que dana a criaturas en su trayecto.",
+    "Mass Healing Word": "Curas a varias criaturas a distancia como accion adicional.",
+    "Plant Growth": "Hace crecer vegetacion para dificultar movimiento o mejorar tierras durante largo plazo.",
+    "Revivify": "Devuelve a la vida a una criatura que murio hace muy poco.",
+    "Spirit Guardians": "Espiritus rodean al lanzador, ralentizan enemigos y les causan dano.",
+    "Tiny Hut": "Crea una cupula segura para descansar, opaca desde fuera y comoda dentro.",
+    "Water Breathing": "Permite a varias criaturas respirar bajo el agua durante largo tiempo.",
+    "Banishment": "Envias temporalmente a una criatura a otro plano o espacio extradimensional.",
+    "Blight": "Drena energia vital de una criatura o planta con dano necrotico.",
+    "Confusion": "Altera la mente de criaturas en area y puede hacerlas actuar al azar.",
+    "Dimension Door": "Teletransporte largo del lanzador, con opcion de llevar a una criatura cercana.",
+    "Freedom of Movement": "Una criatura ignora terreno dificil y resiste restricciones al movimiento.",
+    "Greater Invisibility": "Vuelve invisible a una criatura aunque ataque o lance conjuros.",
+    "Polymorph": "Transforma a una criatura en una bestia si falla o acepta el efecto.",
+    "Wall of Fire": "Muro ardiente que bloquea, divide y dana a quienes se acerquen o lo crucen.",
+    "Cloudkill": "Nube venenosa movil que dana a criaturas dentro del area.",
+    "Commune": "Haces preguntas a una entidad divina y recibes respuestas breves.",
+    "Cone of Cold": "Cono amplio de frio intenso con salvacion de Constitucion.",
+    "Dominate Person": "Controlas mentalmente a un humanoide si falla salvacion de Sabiduria.",
+    "Flame Strike": "Columna de fuego divino que causa dano de fuego y radiante.",
+    "Greater Restoration": "Elimina efectos graves como agotamiento, petrificacion, maldiciones o reducciones importantes.",
+    "Mass Cure Wounds": "Cura a varias criaturas en un area.",
+    "Raise Dead": "Devuelve a la vida a una criatura muerta recientemente, con limitaciones.",
+    "Scrying": "Observas a distancia a una criatura o lugar si el objetivo falla la salvacion.",
+    "Wall of Stone": "Crea paneles de piedra que pueden bloquear, encerrar o formar estructuras.",
+    "Chain Lightning": "Relampago que salta desde un objetivo principal a otros cercanos.",
+    "Disintegrate": "Rayo destructivo de fuerza; si reduce a 0 puede desintegrar el objetivo.",
+    "Globe of Invulnerability": "Barrera que bloquea conjuros de niveles bajos lanzados desde fuera.",
+    "Heal": "Restaura muchos puntos de golpe y elimina varias condiciones.",
+    "Heroes' Feast": "Banquete magico que fortalece al grupo y lo protege contra veneno y miedo.",
+    "Mass Suggestion": "Implantas una orden razonable en varias criaturas por largo tiempo.",
+    "Sunbeam": "Rayo de luz radiante repetible que dana y puede cegar.",
+    "Teleport": "Transporta al grupo a un destino conocido, con riesgo segun familiaridad.",
+    "Fire Storm": "Llamas en varias zonas conectadas que causan dano de fuego.",
+    "Plane Shift": "Viajas a otro plano o intentas desterrar a una criatura con ataque y salvacion.",
+    "Regenerate": "Cura con el tiempo y permite recuperar partes del cuerpo perdidas.",
+    "Resurrection": "Devuelve a la vida a una criatura muerta hace mas tiempo que Raise Dead.",
+    "Reverse Gravity": "Invierte la gravedad en una zona y hace caer hacia arriba a las criaturas.",
+    "Dominate Monster": "Controlas mentalmente a una criatura de cualquier tipo si falla salvacion.",
+    "Earthquake": "Sacudida enorme que derriba, abre grietas y puede danar estructuras.",
+    "Holy Aura": "Aura protectora para aliados: ventaja en salvaciones y desventaja a ataques enemigos.",
+    "Power Word Stun": "Aturde a una criatura con pocos puntos de golpe actuales, sin tirada inicial.",
+    "Sunburst": "Estallido de luz solar que dana y puede cegar en area grande.",
+    "Astral Projection": "Proyecta cuerpos astrales para viajar por el Plano Astral.",
+    "Foresight": "Otorga percepcion sobrenatural: ventaja para el aliado y desventaja para atacantes.",
+    "Gate": "Abre un portal planar o llama a una criatura especifica desde otro plano.",
+    "Mass Heal": "Distribuye una gran cantidad de curacion entre varias criaturas.",
+    "Meteor Swarm": "Cuatro impactos enormes que explotan y causan dano masivo de fuego y contundente.",
+    "Power Word Kill": "Mata instantaneamente a una criatura con pocos puntos de golpe actuales.",
+    "Time Stop": "Detienes el tiempo brevemente y tomas varios turnos seguidos con restricciones.",
+    "True Resurrection": "Devuelve a la vida con restauracion completa, incluso sin cuerpo si se cumplen condiciones.",
+    "Wish": "El conjuro mas flexible: replica conjuros o produce efectos excepcionales con riesgo a criterio del DM.",
+  };
+  return notes[name] || "Descripcion breve pendiente. Completa alcance, componentes, tirada o salvacion y efecto en tu mesa.";
+}
+
 function dnd5eSpellPicker(index, level) {
   const spells = dnd5eSpellLibraryByLevel(level);
   return `<details class="dnd5e-spell-picker">
@@ -1627,7 +1754,7 @@ function dnd5eSpellPicker(index, level) {
     <div>${DND5E_SPELL_CLASSES.map((className) => {
       const classSpells = spells.filter((spell) => spell.classes.includes(className));
       if (!classSpells.length) return "";
-      return `<details><summary>${className} <span>${classSpells.length}</span></summary><div>${classSpells.map((spell) => `<button type="button" data-action="load-5e-spell" data-block-index="${index}" data-spell-level="${level}" data-spell-name="${escapeAttr(spell.name)}" data-spell-class="${escapeAttr(className)}">${escapeHtml(spell.name)}</button>`).join("")}</div></details>`;
+      return `<details><summary>${className} <span>${classSpells.length}</span></summary><div>${classSpells.map((spell) => `<button type="button" data-action="load-5e-spell" data-block-index="${index}" data-spell-level="${level}" data-spell-name="${escapeAttr(spell.name)}" data-spell-notes="${escapeAttr(dnd5eSpellNotes(spell.name))}">${escapeHtml(spell.name)}</button>`).join("")}</div></details>`;
     }).join("")}</div>
   </details>`;
 }
@@ -3012,9 +3139,9 @@ document.addEventListener("click", async (event) => {
     const list = target.closest(".dnd5e-spell-level")?.querySelector("[data-5e-spell-list]");
     const level = Math.max(0, Math.min(9, Number(target.dataset.spellLevel) || 0));
     const spellName = target.dataset.spellName || "";
-    const spellClass = target.dataset.spellClass || "";
+    const spellNotes = target.dataset.spellNotes || "";
     if (list && spellName) {
-      list.insertAdjacentHTML("beforeend", characterSpellEditorRow(target.dataset.blockIndex, level, { id: uid("spell"), name: spellName, notes: spellClass ? `Cargado desde ${spellClass}.` : "" }, Date.now()));
+      list.insertAdjacentHTML("beforeend", characterSpellEditorRow(target.dataset.blockIndex, level, { id: uid("spell"), name: spellName, notes: spellNotes }, Date.now()));
     }
   }
 
