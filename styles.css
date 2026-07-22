@@ -1206,7 +1206,7 @@ p {
 
 /* Connected campaign wiki */
 .wiki-app-shell {
-  min-height: calc(100vh - 72px);
+  min-height: 100vh;
   background:
     radial-gradient(circle at 16% 100%, rgba(14, 78, 91, 0.32), transparent 34rem),
     linear-gradient(180deg, #080a0c, #070a0b 62%, #071014);
@@ -1214,10 +1214,10 @@ p {
 
 .wiki-commandbar {
   position: sticky;
-  top: 72px;
+  top: 0;
   z-index: 16;
   display: grid;
-  grid-template-columns: minmax(190px, 1fr) auto minmax(190px, 1fr);
+  grid-template-columns: minmax(190px, 1fr) auto;
   align-items: center;
   gap: 18px;
   min-height: 64px;
@@ -1275,6 +1275,7 @@ p {
 
 .wiki-primary-nav {
   display: flex;
+  justify-self: end;
   align-items: center;
   gap: 3px;
   padding: 4px;
@@ -1331,7 +1332,7 @@ p {
   gap: clamp(36px, 7vw, 110px);
   align-items: center;
   width: min(1220px, calc(100% - 52px));
-  min-height: calc(100vh - 136px);
+  min-height: calc(100vh - 64px);
   margin: 0 auto;
   padding: 50px 0;
 }
@@ -1532,7 +1533,7 @@ p {
 }
 
 .wiki-graph.compact {
-  min-height: min(620px, calc(100vh - 208px));
+  min-height: min(620px, calc(100vh - 136px));
 }
 
 .wiki-graph::after {
@@ -1680,7 +1681,7 @@ p {
 .wiki-library {
   display: grid;
   grid-template-columns: 240px 310px minmax(0, 1fr);
-  min-height: calc(100vh - 136px);
+  min-height: calc(100vh - 64px);
 }
 
 .wiki-folder-sidebar,
@@ -1748,6 +1749,28 @@ p {
 
 .wiki-folder small {
   color: #596164;
+}
+
+.wiki-new-folder {
+  display: flex;
+  width: calc(100% - 16px);
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 8px 0;
+  padding: 0 10px;
+  border: 1px dashed rgba(116, 208, 190, 0.24);
+  border-radius: 8px;
+  background: rgba(116, 208, 190, 0.035);
+  color: #91b9b0;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.wiki-new-folder:hover {
+  border-color: rgba(116, 208, 190, 0.45);
+  background: rgba(116, 208, 190, 0.08);
+  color: #d8fff5;
 }
 
 .wiki-tree-divider {
@@ -1883,6 +1906,14 @@ p {
   color: #d98d8d;
 }
 
+.wiki-detail-actions svg,
+.wiki-confirm-icon svg,
+.wiki-confirm-actions svg {
+  width: 17px;
+  height: 17px;
+  fill: currentColor;
+}
+
 .wiki-detail-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
@@ -1943,6 +1974,85 @@ p {
   color: #b7bdbc;
   font-size: 14px;
   line-height: 1.75;
+}
+
+.wiki-folder-move {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  border: 1px solid rgba(116, 208, 190, 0.18);
+  border-radius: 7px;
+  background: rgba(116, 208, 190, 0.06);
+  color: #9fcfc4;
+}
+
+.wiki-folder-move select {
+  max-width: 220px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #d9e6e2;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.wiki-folder-move option {
+  background: #111718;
+  color: #e8ecea;
+}
+
+.wiki-folder-modal {
+  width: min(520px, calc(100% - 28px));
+}
+
+.wiki-confirm-modal {
+  width: min(500px, calc(100% - 28px));
+  padding: 30px;
+  text-align: center;
+}
+
+.wiki-confirm-modal h2 {
+  margin: 10px 0 8px;
+  font-size: 24px;
+}
+
+.wiki-confirm-modal > p {
+  max-width: 420px;
+  margin: 0 auto;
+  color: #8e9696;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.wiki-confirm-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  margin: 0 auto 14px;
+  border: 1px solid rgba(225, 115, 115, 0.3);
+  border-radius: 14px;
+  background: rgba(225, 115, 115, 0.08);
+  color: #e39a9a;
+}
+
+.wiki-confirm-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.wiki-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.wiki-confirm-modal .wiki-confirm-actions {
+  justify-content: center;
 }
 
 .wiki-content-viewer {
@@ -3288,7 +3398,7 @@ p {
 .wiki-management-page {
   display: grid;
   grid-template-columns: 250px minmax(0, 1fr) minmax(260px, 340px);
-  min-height: calc(100vh - 136px);
+  min-height: calc(100vh - 64px);
   background:
     radial-gradient(circle at 100% 0%, rgba(48, 107, 101, 0.09), transparent 32rem),
     #090c0e;
@@ -3639,6 +3749,108 @@ p {
   color: #667072;
   font-size: 11px;
 }
+
+/* Interactive campaign maps */
+.wiki-map-settings {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(104, 195, 178, 0.18);
+  border-radius: 12px;
+  background: rgba(104, 195, 178, 0.045);
+}
+
+.wiki-map-settings > span,
+.maps-header > div > span,
+.map-browser-head {
+  color: #74aa9e;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+}
+
+.maps-workspace {
+  display: grid;
+  min-height: calc(100vh - 80px);
+  grid-template-columns: 285px minmax(0, 1fr);
+  background: #070a0b;
+}
+
+.maps-browser {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 16px;
+  border-right: 1px solid rgba(255,255,255,.075);
+  background: rgba(9, 13, 14, .95);
+}
+
+.map-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 9px;
+  color: #6f7b7c;
+  background: rgba(255,255,255,.035);
+}
+
+.map-search input { width: 100%; height: 38px; border: 0; outline: 0; color: var(--text); background: transparent; }
+.map-browser-head { display: flex; justify-content: space-between; padding: 5px 4px 0; }
+.map-browser-head small { color: #71807e; font-size: 11px; }
+.map-browser-list { display: grid; gap: 5px; max-height: calc(100vh - 210px); overflow-y: auto; }
+
+.map-browser-item,
+.map-card-picker > button {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: #b8c1c0;
+  text-align: left;
+  background: transparent;
+}
+
+.map-browser-item:hover, .map-browser-item.active { border-color: rgba(104,195,178,.25); background: rgba(104,195,178,.1); color: #f0f4f2; }
+.map-browser-item strong, .map-browser-item small, .map-card-picker strong, .map-card-picker small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-browser-item small, .map-card-picker small { margin-top: 3px; color: #778181; font-size: 11px; }
+.map-browser-icon { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 8px; background: #1a2928; color: #98d0c2; font-size: 18px; }
+.map-browser-empty { padding: 14px 8px; color: #758081; font-size: 12px; }
+.map-new-button { margin-top: 4px; }
+
+.maps-main { display: grid; grid-template-rows: auto minmax(0,1fr) auto; min-width: 0; }
+.maps-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 78px; padding: 15px 22px; border-bottom: 1px solid rgba(255,255,255,.075); }
+.maps-header h1 { margin: 3px 0 0; font-family: var(--serif); font-size: 25px; font-weight: 500; }
+.map-tools { display: flex; align-items: center; gap: 7px; }
+.map-tool { width: 34px; height: 34px; border: 1px solid rgba(255,255,255,.12); border-radius: 8px; color: #cfdbd8; font-size: 18px; background: rgba(255,255,255,.04); }
+.map-tool:hover { border-color: rgba(104,195,178,.5); background: rgba(104,195,178,.12); }
+
+.map-viewport { position: relative; min-height: 500px; overflow: hidden; touch-action: none; background: radial-gradient(circle at 50% 50%, #203735, #0c1213 72%); cursor: grab; }
+.map-viewport:active { cursor: grabbing; }
+.map-world { position: absolute; inset: 0; transform-origin: top left; will-change: transform; }
+.map-canvas { position: absolute; width: 100%; height: 100%; }
+.map-image { display: block; width: 100%; height: 100%; user-select: none; pointer-events: none; }
+.map-placeholder-art { display: grid; width: 100%; height: 100%; place-content: center; justify-items: center; gap: 8px; background: repeating-linear-gradient(45deg, rgba(135,205,189,.06) 0 1px, transparent 1px 24px); color: #9acfc3; }
+.map-placeholder-art span { font-size: 64px; }.map-placeholder-art small { color: #8c9998; }
+.map-hint { position: absolute; right: 14px; bottom: 13px; padding: 7px 10px; border: 1px solid rgba(255,255,255,.1); border-radius: 7px; color: #b0b8b6; font-size: 11px; background: rgba(5,8,9,.7); pointer-events: none; }
+
+.map-point { position: absolute; z-index: 3; display: grid; justify-items: center; gap: 3px; transform: translate(-50%, -50%); border: 0; color: #eff9f5; background: transparent; text-shadow: 0 1px 4px #000; }
+.map-point span { display: grid; width: 31px; height: 31px; place-items: center; border: 2px solid #f4d989; border-radius: 50%; box-shadow: 0 0 0 4px rgba(39,24,9,.35), 0 3px 8px rgba(0,0,0,.55); background: #6b4520; }
+.map-point b { max-width: 130px; overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }.map-point:hover span { transform: scale(1.15); background: #9a662e; }
+.map-drawing-layer { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; overflow: visible; pointer-events: none; }.map-player-stroke, .map-current-stroke { fill: none; stroke: #efc364; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 1px 2px rgba(0,0,0,.7)); }.map-player-stroke { animation: map-stroke-fade var(--stroke-duration) linear forwards; }
+@keyframes map-stroke-fade { from { opacity: .94; } 75% { opacity: .6; } to { opacity: 0; } }
+.map-status { padding: 11px 22px; border-top: 1px solid rgba(255,255,255,.075); color: #82908d; font-size: 12px; }
+.map-empty-stage { display: grid; min-height: 520px; place-content: center; justify-items: center; gap: 10px; padding: 24px; color: #8b9795; text-align: center; background: radial-gradient(circle at center, rgba(104,195,178,.09), transparent 45%); }.map-empty-stage span { color: #8ccabc; font-size: 50px; }.map-empty-stage h2, .map-empty-stage p { margin: 0; }.map-empty-stage p { max-width: 360px; font-size: 13px; line-height: 1.55; }
+
+.map-modal { width: min(650px, calc(100% - 28px)); }.modal-search { margin: 0 0 12px; }.map-card-picker { display: grid; max-height: min(56vh, 530px); gap: 6px; overflow-y: auto; }.map-card-picker > button { grid-template-columns: 48px minmax(0,1fr); border-color: rgba(255,255,255,.08); background: rgba(255,255,255,.025); }.map-card-picker > button:hover { border-color: rgba(104,195,178,.4); background: rgba(104,195,178,.08); }.map-card-picker .wiki-thumb { width: 48px; height: 42px; }.map-card-preview-modal { width: min(560px, calc(100% - 28px)); }.map-card-preview-modal > img { width: 100%; max-height: 280px; object-fit: cover; border-radius: 10px; }.map-card-preview-modal > p { line-height: 1.6; color: #bcc5c3; }
+
+@media (max-width: 780px) { .maps-workspace { grid-template-columns: 1fr; min-height: 0; }.maps-browser { border-right: 0; border-bottom: 1px solid rgba(255,255,255,.075); }.map-browser-list { display: flex; max-height: none; overflow-x: auto; }.map-browser-item { min-width: 210px; }.map-new-button { width: max-content; }.maps-header { padding-inline: 14px; }.map-viewport { min-height: 430px; }.map-status { padding-inline: 14px; }.map-hint { display: none; } }
 
 .wiki-modal-backdrop {
   background: rgba(0, 0, 0, 0.78);
@@ -4415,6 +4627,7 @@ p {
     grid-column: 1 / -1;
     grid-row: 2;
     overflow-x: auto;
+    justify-self: stretch;
     justify-content: center;
   }
 
@@ -4553,6 +4766,13 @@ p {
     display: inline-flex;
     width: auto;
     margin-right: 4px;
+    padding: 0 12px;
+  }
+
+  .wiki-new-folder {
+    display: inline-flex;
+    width: auto;
+    margin: 0 4px 0 0;
     padding: 0 12px;
   }
 
