@@ -765,8 +765,8 @@ function renderCampaign() {
   const canManage = canManageCampaign(campaign, currentUser().id);
   const tags = campaignTags(campaign);
 
-  if (activeTab === "wiki") {
-    return renderWikiWorkspace(campaign, canManage);
+  if (["wiki", "characters", "members", "settings"].includes(activeTab)) {
+    return renderWikiWorkspace(campaign, role, canManage);
   }
 
   return `
@@ -806,8 +806,16 @@ function renderCampaign() {
   `;
 }
 
-function renderWikiWorkspace(campaign, canManage) {
+function renderWikiWorkspace(campaign, role, canManage) {
   const cards = wikiCardsFor(campaign);
+  const isWikiHome = activeTab === "wiki" && wikiView === "home";
+  const isWikiCards = activeTab === "wiki" && wikiView === "cards";
+  let content = "";
+  if (activeTab === "characters") content = renderWikiCharactersPage(campaign, role, canManage);
+  else if (activeTab === "members") content = renderWikiMembersPage(campaign, canManage);
+  else if (activeTab === "settings") content = renderWikiSettingsPage(campaign, role, canManage);
+  else content = wikiView === "cards" ? renderWikiLibrary(campaign, canManage) : renderWikiHome(campaign, canManage);
+
   return `
     <main class="wiki-app-shell">
       <header class="wiki-commandbar">
@@ -816,18 +824,18 @@ function renderWikiWorkspace(campaign, canManage) {
           <span><strong>${escapeHtml(campaign.title)}</strong><small>${cards.length} fichas conectadas</small></span>
         </button>
         <nav class="wiki-primary-nav" aria-label="Navegación de la campaña">
-          <button class="${wikiView === "home" ? "active" : ""}" data-action="set-wiki-view" data-view="home">⌂ Inicio</button>
-          <button class="${wikiView === "cards" ? "active" : ""}" data-action="set-wiki-view" data-view="cards">◈ Tarjetas</button>
-          <button data-action="set-tab" data-tab="characters">♙ Personajes</button>
-          <button data-action="set-tab" data-tab="members">♧ Jugadores</button>
-          <button data-action="set-tab" data-tab="settings">⚙ Ajustes</button>
+          <button class="${isWikiHome ? "active" : ""}" data-action="set-wiki-view" data-view="home">⌂ Inicio</button>
+          <button class="${isWikiCards ? "active" : ""}" data-action="set-wiki-view" data-view="cards">◈ Tarjetas</button>
+          <button class="${activeTab === "characters" ? "active" : ""}" data-action="set-tab" data-tab="characters">♙ Personajes</button>
+          <button class="${activeTab === "members" ? "active" : ""}" data-action="set-tab" data-tab="members">♧ Jugadores</button>
+          <button class="${activeTab === "settings" ? "active" : ""}" data-action="set-tab" data-tab="settings">⚙ Ajustes</button>
         </nav>
         <div class="wiki-command-actions">
           <button class="wiki-icon-button" data-action="open-public-wiki" data-id="${campaign.id}" title="Vista pública">↗</button>
           ${canManage ? `<button class="button wiki-create-button" data-action="new-wiki-page"><span>＋</span>Nueva ficha</button>` : ""}
         </div>
       </header>
-      ${wikiView === "cards" ? renderWikiLibrary(campaign, canManage) : renderWikiHome(campaign, canManage)}
+      ${content}
     </main>
   `;
 }
@@ -1112,6 +1120,273 @@ function linkMentions(value, cards, currentId) {
     })
     .join("")
     .replaceAll("\n", "<br />");
+}
+
+function renderWikiSectionShell({ section, kicker, title, description, sidebar, main, aside, primaryAction = "" }) {
+  return `
+    <section class="wiki-management-page ${section ? `wiki-${section}-page` : ""}">
+      <aside class="wiki-management-sidebar">
+        <div class="wiki-section-title">
+          <span>${escapeHtml(kicker)}</span>
+          <h1>${escapeHtml(title)}</h1>
+          <p>${escapeHtml(description)}</p>
+        </div>
+        ${renderWikiSectionNav(section)}
+        ${sidebar || ""}
+      </aside>
+      <section class="wiki-management-main">
+        <div class="wiki-section-toolbar">
+          <div><span>${escapeHtml(kicker)}</span><strong>${escapeHtml(title)}</strong></div>
+          ${primaryAction}
+        </div>
+        ${main}
+      </section>
+      ${aside ? `<aside class="wiki-management-aside">${aside}</aside>` : ""}
+    </section>
+  `;
+}
+
+function renderWikiSectionNav(activeSection) {
+  const items = [
+    ["home", "⌂", "Inicio", "set-wiki-view", "home"],
+    ["cards", "◈", "Tarjetas", "set-wiki-view", "cards"],
+    ["characters", "♙", "Personajes", "set-tab", "characters"],
+    ["members", "♧", "Jugadores", "set-tab", "members"],
+    ["settings", "⚙", "Ajustes", "set-tab", "settings"],
+  ];
+  return `
+    <div class="wiki-section-nav">
+      ${items.map(([key, icon, label, action, value]) => {
+        const attributes = action === "set-tab" ? `data-tab="${value}"` : `data-view="${value}"`;
+        return `<button class="${activeSection === key ? "active" : ""}" data-action="${action}" ${attributes}><span>${icon}</span>${label}</button>`;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderWikiMetric(label, value) {
+  return `<div class="wiki-section-metric"><b>${escapeHtml(String(value))}</b><span>${escapeHtml(label)}</span></div>`;
+}
+
+function renderWikiCharactersPage(campaign, role, canManage) {
+  const userId = currentUser().id;
+  const visibleCharacters = canManage
+    ? campaign.characters
+    : campaign.characters.filter((character) => character.ownerId === userId);
+  const main = visibleCharacters.length
+    ? `<div class="wiki-record-list">${visibleCharacters.map((character) => renderWikiCharacterRecord(character, campaign, canManage)).join("")}</div>`
+    : `<div class="wiki-panel-empty"><span>♙</span><h2>No hay personajes visibles</h2><p>Crea el primero para empezar a poblar esta campana.</p></div>`;
+  const sidebar = `
+    <div class="wiki-section-metrics">
+      ${renderWikiMetric("personajes", campaign.characters.length)}
+      ${renderWikiMetric("visibles", visibleCharacters.length)}
+      ${renderWikiMetric("rol", roleLabel(role))}
+    </div>
+  `;
+  const aside = `
+    <div class="wiki-info-panel">
+      <span>PERMISOS</span>
+      <p>${canManage ? "Owner y editor pueden revisar todos los personajes de la campana." : "Podes editar los personajes que te pertenecen."}</p>
+    </div>
+    <div class="wiki-info-panel">
+      <span>ARCHIVO</span>
+      <p>${wikiCardsFor(campaign).length} fichas de wiki disponibles para conectar el trasfondo con los personajes.</p>
+    </div>
+  `;
+  return renderWikiSectionShell({
+    section: "characters",
+    kicker: "PERSONAJES",
+    title: "Personajes",
+    description: "Fichas narrativas de la mesa, ordenadas con el mismo marco de campaña.",
+    sidebar,
+    main,
+    aside,
+    primaryAction: `<button class="button wiki-create-button" data-action="new-character"><span>＋</span>Nuevo personaje</button>`,
+  });
+}
+
+function renderWikiCharacterRecord(character, campaign, canManage) {
+  const owner = state.users.find((user) => user.id === character.ownerId);
+  const canEdit = canManage || character.ownerId === currentUser().id;
+  return `
+    <article class="wiki-record-card">
+      <div class="wiki-record-mark">♙</div>
+      <div class="wiki-record-body">
+        <div class="wiki-record-meta">
+          <span>Nivel ${Number(character.level) || 1}</span>
+          <span>${escapeHtml(character.className)}</span>
+          <span>${escapeHtml(character.status)}</span>
+        </div>
+        <h2>${escapeHtml(character.name)}</h2>
+        <p>${escapeHtml(character.ancestry)} · Jugador: ${escapeHtml(owner?.name || character.playerName || "Sin asignar")}</p>
+        ${character.notes ? `<p class="wiki-record-notes">${escapeHtml(character.notes)}</p>` : ""}
+      </div>
+      ${
+        canEdit
+          ? `<div class="wiki-record-actions">
+              <button data-action="edit-character" data-id="${character.id}" title="Editar">✎</button>
+              <button class="danger" data-action="delete-character" data-id="${character.id}" title="Borrar">×</button>
+            </div>`
+          : ""
+      }
+    </article>
+  `;
+}
+
+function renderWikiMembersPage(campaign, canManage) {
+  const pending = campaign.invites.filter((invite) => !invite.usedBy);
+  const suggestions = inviteSuggestionsFor(campaign);
+  const main = `
+    <div class="wiki-record-list">
+      ${campaign.members.map((member) => renderWikiMemberRecord(member, campaign)).join("")}
+    </div>
+  `;
+  const sidebar = `
+    <div class="wiki-section-metrics">
+      ${renderWikiMetric("jugadores", campaign.members.length)}
+      ${renderWikiMetric("invitaciones", pending.length)}
+      ${renderWikiMetric("wiki", campaign.visibility === "public" ? "publica" : "privada")}
+    </div>
+  `;
+  const aside = `
+    <div class="wiki-info-panel">
+      <span>ROLES</span>
+      <p>Owner y editor pueden editar todo. Player puede ver la campana y editar sus personajes. Viewer queda como lectura.</p>
+    </div>
+    <div class="wiki-info-panel">
+      <span>INVITAR</span>
+      ${
+        canManage
+          ? `<form class="wiki-invite-form" data-form="invite-email">
+              <label class="field">
+                <span>Email del jugador</span>
+                <input class="input" name="email" type="email" list="invite-email-suggestions" placeholder="jugador@mesa.com" required />
+              </label>
+              <datalist id="invite-email-suggestions">
+                ${suggestions.map((item) => `<option value="${escapeAttr(item.user.email)}">${escapeHtml(item.user.name)}</option>`).join("")}
+              </datalist>
+              ${suggestions.length ? `
+                <div class="recommendation-row">
+                  ${suggestions.map((item) => `
+                    <button class="recommendation-chip" type="button" data-action="fill-invite-email" data-email="${escapeAttr(item.user.email)}">
+                      <strong>${escapeHtml(item.user.name)}</strong>
+                      <span>${escapeHtml(item.user.email)}</span>
+                    </button>
+                  `).join("")}
+                </div>` : ""}
+              <div class="actions-row">
+                <button class="button primary" type="submit"><span class="icon">+</span>Crear invitacion</button>
+                <button class="button" type="button" data-action="new-invite"><span class="icon">#</span>Link sin correo</button>
+              </div>
+            </form>`
+          : `<p>Solo owner o editor pueden generar invitaciones.</p>`
+      }
+    </div>
+    <div class="wiki-info-panel">
+      <span>PENDIENTES</span>
+      <div class="wiki-pending-list">
+        ${pending.length ? pending.map((invite) => renderInviteRow(invite)).join("") : `<p>No hay invitaciones pendientes.</p>`}
+      </div>
+      <button class="button" data-action="copy-wiki" data-id="${campaign.id}"><span class="icon">C</span>Copiar wiki</button>
+    </div>
+  `;
+  return renderWikiSectionShell({
+    section: "members",
+    kicker: "JUGADORES",
+    title: "Jugadores",
+    description: "Miembros, permisos e invitaciones en el mismo escritorio del mundo.",
+    sidebar,
+    main,
+    aside,
+  });
+}
+
+function renderWikiMemberRecord(member, campaign) {
+  const user = state.users.find((item) => item.id === member.userId);
+  return `
+    <article class="wiki-record-card compact">
+      <div class="avatar">${escapeHtml((user?.name || "?").slice(0, 1).toUpperCase())}</div>
+      <div class="wiki-record-body">
+        <h2>${escapeHtml(user?.name || "Usuario")}</h2>
+        <p>${escapeHtml(user?.email || "sin email")}</p>
+      </div>
+      <span class="wiki-role-chip">${escapeHtml(roleLabel(displayRoleFor(campaign, member.userId)))}</span>
+    </article>
+  `;
+}
+
+function renderWikiSettingsPage(campaign, role, canManage) {
+  const form = canManage
+    ? `<form class="wiki-settings-form" data-form="settings">
+        <div class="wiki-form-pair">
+          <label class="field">
+            <span>Nombre</span>
+            <input class="input" name="title" value="${escapeAttr(campaign.title)}" required />
+          </label>
+          <label class="field">
+            <span>Sistema</span>
+            <select class="select" name="system" required>
+              ${renderSystemOptions(campaign.system)}
+            </select>
+          </label>
+        </div>
+        <div class="field-label">Tags</div>
+        ${renderTagPicker(campaignTags(campaign))}
+        <label class="field">
+          <span>Descripcion</span>
+          <textarea class="textarea" name="description">${escapeHtml(campaign.description)}</textarea>
+        </label>
+        <div class="wiki-form-pair">
+          <label class="field">
+            <span>URL de imagen del tablero</span>
+            <input class="input" name="imageUrl" type="url" value="${escapeAttr(campaign.imageUrl?.startsWith("data:") ? "" : campaign.imageUrl || "")}" placeholder="https://..." />
+          </label>
+          <label class="field">
+            <span>Subir imagen del tablero</span>
+            <input class="input" name="imageFile" type="file" accept="image/*" />
+          </label>
+        </div>
+        ${campaign.imageUrl?.startsWith("data:") ? `<input type="hidden" name="existingImageUrl" value="${escapeAttr(campaign.imageUrl)}" />` : ""}
+        ${campaign.imageUrl ? `
+          <label class="check-field">
+            <input name="removeImage" type="checkbox" />
+            <span>Quitar imagen guardada</span>
+          </label>
+        ` : ""}
+        <label class="field">
+          <span>Estado de la wiki</span>
+          <select class="select" name="visibility">
+            <option value="private" ${campaign.visibility === "private" ? "selected" : ""}>Privada por defecto</option>
+            <option value="public" ${campaign.visibility === "public" ? "selected" : ""}>Publica por link</option>
+          </select>
+        </label>
+        <button class="button primary" type="submit"><span class="icon">S</span>Guardar cambios</button>
+      </form>`
+    : `<div class="wiki-panel-empty compact"><span>⚙</span><h2>Solo lectura</h2><p>Solo owner o editor pueden cambiar los ajustes de esta campana.</p></div>`;
+  const sidebar = `
+    <div class="wiki-section-metrics">
+      ${renderWikiMetric("rol", roleLabel(role))}
+      ${renderWikiMetric("miembros", campaign.members.length)}
+      ${renderWikiMetric("fichas", wikiCardsFor(campaign).length)}
+    </div>
+  `;
+  const aside = `
+    <div class="wiki-campaign-preview">
+      ${campaign.imageUrl ? `<img src="${escapeAttr(campaign.imageUrl)}" alt="" />` : `<div><span>${escapeHtml(campaign.title.slice(0, 1).toUpperCase())}</span></div>`}
+      <strong>${escapeHtml(campaign.title)}</strong>
+      <small>${escapeHtml(campaign.system)} · ${campaign.visibility === "public" ? "Wiki publica" : "Wiki privada"}</small>
+      <p>${escapeHtml(campaign.description || "Sin descripcion.")}</p>
+    </div>
+  `;
+  return renderWikiSectionShell({
+    section: "settings",
+    kicker: "AJUSTES",
+    title: "Ajustes",
+    description: "Configuracion central de la campana y su wiki compartida.",
+    sidebar,
+    main: form,
+    aside,
+  });
 }
 
 function renderCharactersTab(campaign, role, canManage) {
@@ -1958,17 +2233,20 @@ document.addEventListener("click", async (event) => {
   }
 
   if (action === "set-wiki-view") {
+    activeTab = "wiki";
     wikiView = target.dataset.view === "cards" ? "cards" : "home";
     render();
   }
 
   if (action === "select-wiki-card") {
+    activeTab = "wiki";
     selectedWikiCardId = id;
     wikiView = "cards";
     render();
   }
 
   if (action === "filter-wiki-folder") {
+    activeTab = "wiki";
     wikiFolder = target.dataset.folder || "all";
     selectedWikiCardId = null;
     render();
