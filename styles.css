@@ -2052,6 +2052,438 @@ p {
   white-space: pre-wrap;
 }
 
+.wiki-content-character-sheet {
+  overflow-x: auto;
+  padding: 18px;
+}
+
+.dnd5e-sheet {
+  min-width: 760px;
+  padding: 18px;
+  border: 1px solid #b8b2a5;
+  border-radius: 4px;
+  background: #f3efe5;
+  color: #191816;
+  font-family: Georgia, "Times New Roman", serif;
+  box-shadow: inset 0 0 36px rgba(72, 58, 39, 0.08), 0 12px 28px rgba(0, 0, 0, 0.22);
+}
+
+.dnd5e-sheet *,
+.dnd5e-sheet *::before,
+.dnd5e-sheet *::after {
+  box-sizing: border-box;
+}
+
+.dnd5e-sheet-banner {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.85fr) minmax(440px, 1.7fr);
+  gap: 12px;
+  align-items: stretch;
+  margin-bottom: 14px;
+}
+
+.dnd5e-character-name,
+.dnd5e-identity-grid {
+  border: 2px solid #26231f;
+  border-radius: 5px 12px 5px 12px;
+  background: rgba(255, 255, 255, 0.48);
+}
+
+.dnd5e-character-name {
+  display: flex;
+  min-height: 78px;
+  padding: 12px 16px 8px;
+  align-items: stretch;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.dnd5e-character-name strong {
+  overflow: hidden;
+  font-size: 23px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dnd5e-sheet small,
+.dnd5e-sheet span {
+  color: inherit;
+}
+
+.dnd5e-character-name small,
+.dnd5e-identity-grid small {
+  display: block;
+  margin-top: 4px;
+  font-family: Arial, sans-serif;
+  font-size: 8px;
+  letter-spacing: 0.06em;
+}
+
+.dnd5e-identity-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 8px 12px;
+}
+
+.dnd5e-identity-grid > span,
+.dnd5e-identity-grid > label {
+  min-width: 0;
+  padding: 4px 7px;
+  border-bottom: 1px solid #8f897e;
+}
+
+.dnd5e-identity-grid b {
+  display: block;
+  overflow: hidden;
+  min-height: 17px;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dnd5e-sheet-grid {
+  display: grid;
+  grid-template-columns: 92px 225px minmax(380px, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.dnd5e-abilities {
+  display: grid;
+  gap: 9px;
+  padding: 8px;
+  border-radius: 18px;
+  background: #d4d1c8;
+}
+
+.dnd5e-ability {
+  position: relative;
+  display: grid;
+  min-height: 91px;
+  place-items: start center;
+  padding: 8px 5px 13px;
+  border: 2px solid #24211d;
+  border-radius: 14px 14px 26px 26px;
+  background: #faf8f1;
+}
+
+.dnd5e-ability small {
+  font-family: Arial, sans-serif;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.dnd5e-ability strong,
+.dnd5e-ability output {
+  font-size: 29px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.dnd5e-ability > span,
+.dnd5e-ability > input {
+  position: absolute;
+  bottom: -8px;
+  width: 46px;
+  height: 25px;
+  border: 2px solid #24211d;
+  border-radius: 50%;
+  background: #fffdf7;
+  color: #191816;
+  font: 700 13px Arial, sans-serif;
+  text-align: center;
+}
+
+.dnd5e-checks,
+.dnd5e-main-sheet {
+  display: grid;
+  gap: 10px;
+}
+
+.dnd5e-inspiration {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  min-height: 40px;
+  align-items: center;
+  color: #191816;
+  font: 800 8px Arial, sans-serif;
+}
+
+.dnd5e-inspiration > span,
+.dnd5e-inspiration > input {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  margin: 0;
+  place-items: center;
+  border: 2px solid #24211d;
+  border-radius: 9px 14px 9px 14px;
+  background: #faf8f1;
+  color: #191816;
+  appearance: none;
+  font: 800 17px Arial, sans-serif;
+}
+
+.dnd5e-inspiration > span.active,
+.dnd5e-inspiration > input:checked {
+  background: #27241f;
+  color: #faf8f1;
+}
+
+.dnd5e-inspiration > input:checked::after {
+  content: "X";
+}
+
+.dnd5e-inspiration > b {
+  padding: 11px 8px;
+  border: 2px solid #24211d;
+  border-left: 0;
+  border-radius: 0 6px 6px 0;
+  text-align: center;
+}
+
+.dnd5e-proficiency,
+.dnd5e-passive {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  min-height: 42px;
+  align-items: center;
+  border: 2px solid #24211d;
+  border-radius: 22px 6px 6px 22px;
+  background: #faf8f1;
+}
+
+.dnd5e-proficiency strong,
+.dnd5e-proficiency output,
+.dnd5e-passive strong,
+.dnd5e-passive output {
+  font-size: 19px;
+  text-align: center;
+}
+
+.dnd5e-proficiency span,
+.dnd5e-passive span {
+  font-family: Arial, sans-serif;
+  font-size: 8px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.dnd5e-paper-box {
+  padding: 10px 10px 7px;
+  border: 2px solid #24211d;
+  border-radius: 10px 6px 10px 6px;
+  background: #faf8f1;
+}
+
+.dnd5e-paper-box h4 {
+  margin: 8px 0 0;
+  color: #191816;
+  font: 800 8px Arial, sans-serif;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.dnd5e-check-row {
+  display: grid;
+  grid-template-columns: 13px 30px 1fr;
+  min-height: 21px;
+  align-items: center;
+  gap: 4px;
+  color: #191816;
+  font: 10px Arial, sans-serif;
+}
+
+.dnd5e-check-row i,
+.dnd5e-check-row input {
+  width: 11px;
+  height: 11px;
+  margin: 0;
+  border: 1px solid #26231f;
+  border-radius: 50%;
+  appearance: none;
+}
+
+.dnd5e-check-row i.trained,
+.dnd5e-check-row input:checked {
+  border: 3px solid #26231f;
+  background: #faf8f1;
+}
+
+.dnd5e-check-row b,
+.dnd5e-check-row output {
+  padding-bottom: 2px;
+  border-bottom: 1px solid #4d4941;
+  font-size: 11px;
+  text-align: center;
+}
+
+.dnd5e-check-row small {
+  opacity: 0.55;
+  font-size: 8px;
+}
+
+.dnd5e-combat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 10px;
+  border-radius: 16px;
+  background: #d4d1c8;
+}
+
+.dnd5e-combat-row > div,
+.dnd5e-combat-row > label {
+  display: grid;
+  min-height: 76px;
+  place-items: center;
+  padding: 8px;
+  border: 2px solid #24211d;
+  border-radius: 18px 18px 8px 8px;
+  background: #faf8f1;
+}
+
+.dnd5e-combat-row strong,
+.dnd5e-combat-row output,
+.dnd5e-combat-row input {
+  width: 100%;
+  color: #191816;
+  font: 700 27px Georgia, serif;
+  text-align: center;
+}
+
+.dnd5e-combat-row span {
+  font: 800 8px Arial, sans-serif;
+  text-align: center;
+}
+
+.dnd5e-hp-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  padding: 9px;
+  border-radius: 14px;
+  background: #d4d1c8;
+}
+
+.dnd5e-hp-grid > div,
+.dnd5e-hp-grid > label {
+  display: grid;
+  min-height: 58px;
+  place-items: center;
+  padding: 7px;
+  border: 2px solid #24211d;
+  border-radius: 8px;
+  background: #faf8f1;
+}
+
+.dnd5e-hp-grid small {
+  font: 8px Arial, sans-serif;
+}
+
+.dnd5e-hp-grid strong,
+.dnd5e-hp-grid input {
+  width: 100%;
+  color: #191816;
+  font: 700 20px Georgia, serif;
+  text-align: center;
+}
+
+.dnd5e-notes-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dnd5e-notes-grid .dnd5e-paper-box {
+  display: grid;
+  min-height: 105px;
+  align-content: space-between;
+}
+
+.dnd5e-notes-grid .dnd5e-paper-box > div {
+  color: #35322d;
+  font: 11px/1.45 Arial, sans-serif;
+}
+
+.dnd5e-sheet-editor input,
+.dnd5e-sheet-editor textarea {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #191816;
+}
+
+.dnd5e-sheet-editor input:focus,
+.dnd5e-sheet-editor textarea:focus {
+  background: rgba(173, 127, 47, 0.1);
+  box-shadow: inset 0 -2px #9a6c26;
+}
+
+.dnd5e-editor-note {
+  display: flex;
+  gap: 8px;
+  margin: -4px 0 12px;
+  padding: 9px 11px;
+  border-radius: 5px;
+  background: #27241f;
+  color: #f4ead6;
+  font: 10px/1.4 Arial, sans-serif;
+}
+
+.dnd5e-editor-note span {
+  color: #d8cdb9;
+}
+
+.dnd5e-editor-banner .dnd5e-character-name input {
+  width: 100%;
+  font: 600 21px Georgia, serif;
+}
+
+.dnd5e-editor-banner .dnd5e-identity-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dnd5e-identity-grid input {
+  width: 100%;
+  min-width: 0;
+  border-bottom: 1px solid transparent;
+  font: 11px Georgia, serif;
+}
+
+.dnd5e-armor-settings {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px dashed #8c8578;
+  color: #504a40;
+  font: 9px Arial, sans-serif;
+}
+
+.dnd5e-armor-settings label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dnd5e-armor-settings input {
+  width: 38px;
+  height: 24px;
+  border: 1px solid #9a9387;
+  background: #fffdf7;
+  text-align: center;
+}
+
+.dnd5e-notes-grid textarea {
+  width: 100%;
+  min-height: 76px;
+  resize: vertical;
+  font: 11px/1.35 Arial, sans-serif;
+}
+
 .wiki-inline-link {
   display: inline;
   padding: 0;
@@ -2732,6 +3164,10 @@ p {
   border: 1px solid rgba(255, 255, 255, 0.075);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.02);
+}
+
+.wiki-content-editor:has(.dnd5e-sheet-editor) {
+  overflow-x: auto;
 }
 
 .wiki-content-editor header {

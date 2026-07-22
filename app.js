@@ -164,6 +164,42 @@ const WIKI_CONTENT_TYPES = {
   characterSheet5e: { label: "Hoja de personaje", icon: "♙", title: "Hoja de personaje 5e", placeholder: "Clase y nivel, características, competencias, equipo, conjuros y rasgos..." },
 };
 
+const DND5E_ABILITIES = [
+  ["str", "Fuerza", "FUE"],
+  ["dex", "Destreza", "DES"],
+  ["con", "Constitucion", "CON"],
+  ["int", "Inteligencia", "INT"],
+  ["wis", "Sabiduria", "SAB"],
+  ["cha", "Carisma", "CAR"],
+];
+
+const DND5E_SKILLS = [
+  ["acrobatics", "Acrobacias", "dex"],
+  ["animalHandling", "Trato con animales", "wis"],
+  ["arcana", "Arcanos", "int"],
+  ["athletics", "Atletismo", "str"],
+  ["deception", "Engano", "cha"],
+  ["history", "Historia", "int"],
+  ["insight", "Perspicacia", "wis"],
+  ["intimidation", "Intimidacion", "cha"],
+  ["investigation", "Investigacion", "int"],
+  ["medicine", "Medicina", "wis"],
+  ["nature", "Naturaleza", "int"],
+  ["perception", "Percepcion", "wis"],
+  ["performance", "Interpretacion", "cha"],
+  ["persuasion", "Persuasion", "cha"],
+  ["religion", "Religion", "int"],
+  ["sleightOfHand", "Juego de manos", "dex"],
+  ["stealth", "Sigilo", "dex"],
+  ["survival", "Supervivencia", "wis"],
+];
+
+const DND5E_CLASS_SAVES = {
+  barbaro: ["str", "con"], bardo: ["dex", "cha"], clerigo: ["wis", "cha"], druida: ["int", "wis"],
+  guerrero: ["str", "con"], monje: ["str", "dex"], paladin: ["wis", "cha"], explorador: ["str", "dex"],
+  picaro: ["dex", "int"], hechicero: ["con", "cha"], brujo: ["wis", "cha"], mago: ["int", "wis"],
+};
+
 const defaultState = {
   users: [],
   currentUserId: null,
@@ -889,6 +925,44 @@ function normalizedWikiPropertyItems(page) {
   }));
 }
 
+function dnd5eModifier(score) {
+  return Math.floor((Math.max(1, Math.min(30, Number(score) || 10)) - 10) / 2);
+}
+
+function dnd5eProficiencyBonus(level) {
+  return 2 + Math.floor((Math.max(1, Math.min(20, Number(level) || 1)) - 1) / 4);
+}
+
+function signedDnd5e(value) {
+  const number = Number(value) || 0;
+  return number >= 0 ? `+${number}` : String(number);
+}
+
+function defaultCharacterSheet5e() {
+  return {
+    characterName: "", className: "", level: 1, background: "", playerName: "", race: "", alignment: "", experience: "",
+    abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
+    saveProficiencies: [], skillProficiencies: [], inspiration: false,
+    armorBase: 10, armorBonus: 0, speed: 30, maxHp: "", currentHp: "", temporaryHp: "", hitDice: "", deathSuccesses: 0, deathFailures: 0,
+    attacks: "", personality: "", ideals: "", bonds: "", flaws: "", proficiencies: "", equipment: "", features: "",
+  };
+}
+
+function normalizedCharacterSheet5e(block) {
+  const defaults = defaultCharacterSheet5e();
+  const sheet = block?.sheet && typeof block.sheet === "object" ? block.sheet : {};
+  const abilities = Object.fromEntries(DND5E_ABILITIES.map(([key]) => [key, Math.max(1, Math.min(30, Number(sheet.abilities?.[key]) || 10))]));
+  return {
+    ...defaults,
+    ...sheet,
+    level: Math.max(1, Math.min(20, Number(sheet.level) || 1)),
+    abilities,
+    saveProficiencies: Array.isArray(sheet.saveProficiencies) ? sheet.saveProficiencies.filter((key) => DND5E_ABILITIES.some(([ability]) => ability === key)) : [],
+    skillProficiencies: Array.isArray(sheet.skillProficiencies) ? sheet.skillProficiencies.filter((key) => DND5E_SKILLS.some(([skill]) => skill === key)) : [],
+    features: String(sheet.features || (!block?.sheet ? block?.text || "" : "")),
+  };
+}
+
 function normalizedWikiContentBlocks(page) {
   if (Array.isArray(page?.contentBlocks)) {
     return page.contentBlocks.map((block, index) => ({
@@ -897,6 +971,7 @@ function normalizedWikiContentBlocks(page) {
       title: String(block.title || WIKI_CONTENT_TYPES[block.type]?.title || "Sección"),
       text: String(block.text || ""),
       url: String(block.url || ""),
+      sheet: block.type === "characterSheet5e" ? normalizedCharacterSheet5e(block) : undefined,
     }));
   }
   const legacyText = String(page?.description ?? page?.content ?? "");
@@ -1379,6 +1454,58 @@ function linkMentions(value, cards, currentId) {
     .replaceAll("\n", "<br />");
 }
 
+function renderCharacterSheet5e(block) {
+  const sheet = normalizedCharacterSheet5e(block);
+  const proficiency = dnd5eProficiencyBonus(sheet.level);
+  const abilityModifier = (key) => dnd5eModifier(sheet.abilities[key]);
+  const armorClass = (Number(sheet.armorBase) || 10) + abilityModifier("dex") + (Number(sheet.armorBonus) || 0);
+  const skillValue = (key, ability) => abilityModifier(ability) + (sheet.skillProficiencies.includes(key) ? proficiency : 0);
+  const passivePerception = 10 + skillValue("perception", "wis");
+  const safeText = (value, fallback = "-") => escapeHtml(String(value || fallback)).replaceAll("\n", "<br />");
+
+  return `<div class="dnd5e-sheet dnd5e-sheet-view">
+    <div class="dnd5e-sheet-banner">
+      <div class="dnd5e-character-name"><strong>${safeText(sheet.characterName, "Personaje sin nombre")}</strong><small>NOMBRE DEL PERSONAJE</small></div>
+      <div class="dnd5e-identity-grid">
+        <span><b>${safeText(sheet.className)} ${sheet.level}</b><small>CLASE Y NIVEL</small></span>
+        <span><b>${safeText(sheet.background)}</b><small>TRASFONDO</small></span>
+        <span><b>${safeText(sheet.playerName)}</b><small>JUGADOR</small></span>
+        <span><b>${safeText(sheet.race)}</b><small>RAZA</small></span>
+        <span><b>${safeText(sheet.alignment)}</b><small>ALINEAMIENTO</small></span>
+        <span><b>${safeText(sheet.experience)}</b><small>EXPERIENCIA</small></span>
+      </div>
+    </div>
+    <div class="dnd5e-sheet-grid">
+      <div class="dnd5e-abilities">${DND5E_ABILITIES.map(([key, label]) => `<div class="dnd5e-ability"><small>${label.toUpperCase()}</small><strong>${signedDnd5e(abilityModifier(key))}</strong><span>${sheet.abilities[key]}</span></div>`).join("")}</div>
+      <div class="dnd5e-checks">
+        <div class="dnd5e-inspiration"><span class="${sheet.inspiration ? "active" : ""}">${sheet.inspiration ? "X" : ""}</span><b>INSPIRACION</b></div>
+        <div class="dnd5e-proficiency"><strong>${signedDnd5e(proficiency)}</strong><span>BONO DE COMPETENCIA</span></div>
+        <section class="dnd5e-paper-box"><h4>TIRADAS DE SALVACION</h4>${DND5E_ABILITIES.map(([key, label]) => `<div class="dnd5e-check-row"><i class="${sheet.saveProficiencies.includes(key) ? "trained" : ""}"></i><b>${signedDnd5e(abilityModifier(key) + (sheet.saveProficiencies.includes(key) ? proficiency : 0))}</b><span>${label}</span></div>`).join("")}</section>
+        <section class="dnd5e-paper-box dnd5e-skills"><h4>HABILIDADES</h4>${DND5E_SKILLS.map(([key, label, ability]) => `<div class="dnd5e-check-row"><i class="${sheet.skillProficiencies.includes(key) ? "trained" : ""}"></i><b>${signedDnd5e(skillValue(key, ability))}</b><span>${label} <small>(${DND5E_ABILITIES.find(([item]) => item === ability)?.[2]})</small></span></div>`).join("")}</section>
+        <div class="dnd5e-passive"><strong>${passivePerception}</strong><span>SABIDURIA PASIVA (PERCEPCION)</span></div>
+      </div>
+      <div class="dnd5e-main-sheet">
+        <div class="dnd5e-combat-row">
+          <div><strong>${armorClass}</strong><span>CLASE DE ARMADURA</span></div>
+          <div><strong>${signedDnd5e(abilityModifier("dex"))}</strong><span>INICIATIVA</span></div>
+          <div><strong>${Number(sheet.speed) || 30}</strong><span>VELOCIDAD (PIES)</span></div>
+        </div>
+        <div class="dnd5e-hp-grid">
+          <div><small>PG MAXIMOS</small><strong>${safeText(sheet.maxHp)}</strong></div>
+          <div><small>PG ACTUALES</small><strong>${safeText(sheet.currentHp)}</strong></div>
+          <div><small>PG TEMPORALES</small><strong>${safeText(sheet.temporaryHp)}</strong></div>
+          <div><small>DADOS DE GOLPE</small><strong>${safeText(sheet.hitDice)}</strong></div>
+          <div><small>SALVACIONES EXITOSAS</small><strong>${Math.max(0, Math.min(3, Number(sheet.deathSuccesses) || 0))} / 3</strong></div>
+          <div><small>SALVACIONES FALLIDAS</small><strong>${Math.max(0, Math.min(3, Number(sheet.deathFailures) || 0))} / 3</strong></div>
+        </div>
+        <div class="dnd5e-notes-grid">
+          ${[["Ataques y conjuros", sheet.attacks], ["Rasgos de personalidad", sheet.personality], ["Ideales", sheet.ideals], ["Vinculos", sheet.bonds], ["Defectos", sheet.flaws], ["Otras competencias e idiomas", sheet.proficiencies], ["Equipo", sheet.equipment], ["Rasgos y capacidades", sheet.features]].map(([label, value]) => `<section class="dnd5e-paper-box"><div>${safeText(value, "Sin completar")}</div><h4>${label.toUpperCase()}</h4></section>`).join("")}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderWikiContentBlock(block, cards, currentId) {
   const type = WIKI_CONTENT_TYPES[block.type] || WIKI_CONTENT_TYPES.text;
   const title = escapeHtml(block.title || type.title);
@@ -1397,7 +1524,10 @@ function renderWikiContentBlock(block, cards, currentId) {
   if (block.type === "familyTree") {
     return `<section class="wiki-content-block wiki-content-family"><div class="wiki-content-heading"><span>${type.icon} ${escapeHtml(type.label.toUpperCase())}</span><h2>${title}</h2></div><div>${lines.map((line) => `<span>${linkMentions(line, cards, currentId)}</span>`).join("") || "<span>Sin relaciones todavía.</span>"}</div></section>`;
   }
-  if (block.type === "statBlock5e" || block.type === "characterSheet5e") {
+  if (block.type === "characterSheet5e") {
+    return `<section class="wiki-content-block wiki-content-sheet wiki-content-character-sheet"><div class="wiki-content-heading"><span>${type.icon} ${escapeHtml(type.label.toUpperCase())}</span><h2>${title}</h2></div>${renderCharacterSheet5e(block)}</section>`;
+  }
+  if (block.type === "statBlock5e") {
     return `<section class="wiki-content-block wiki-content-sheet"><div class="wiki-content-heading"><span>${type.icon} ${escapeHtml(type.label.toUpperCase())}</span><h2>${title}</h2></div><div class="wiki-sheet-copy">${text || "Completá esta hoja desde el editor."}</div></section>`;
   }
   return `<section class="wiki-content-block wiki-description"><div class="wiki-content-heading"><span>${type.icon} ${escapeHtml(type.label.toUpperCase())}</span><h2>${title}</h2></div><p>${text || "Sin texto todavía."}</p></section>`;
@@ -2158,6 +2288,57 @@ function wikiPropertyEditorRow(item, index) {
   </div>`;
 }
 
+function characterSheet5eEditor(block, index) {
+  const sheet = normalizedCharacterSheet5e(block);
+  const name = (field) => `block_sheet_${index}_${field}`;
+  const value = (field) => escapeAttr(sheet[field] ?? "");
+  const proficiency = dnd5eProficiencyBonus(sheet.level);
+  const modifier = (key) => dnd5eModifier(sheet.abilities[key]);
+  const skillTotal = (key, ability) => modifier(ability) + (sheet.skillProficiencies.includes(key) ? proficiency : 0);
+  return `<div class="dnd5e-sheet dnd5e-sheet-editor" data-5e-sheet-editor>
+    <div class="dnd5e-editor-note"><strong>Calculos automaticos</strong><span>Al cambiar nivel o caracteristicas se actualizan modificadores, competencia, salvaciones, habilidades, iniciativa, percepcion pasiva y armadura.</span></div>
+    <div class="dnd5e-sheet-banner dnd5e-editor-banner">
+      <label class="dnd5e-character-name"><input name="${name("characterName")}" value="${value("characterName")}" placeholder="Nombre del personaje" /><small>NOMBRE DEL PERSONAJE</small></label>
+      <div class="dnd5e-identity-grid">
+        <label><input data-5e-class name="${name("className")}" value="${value("className")}" list="dnd5e-classes-${index}" placeholder="Guerrero" /><small>CLASE</small></label>
+        <label><input data-5e-level name="${name("level")}" type="number" min="1" max="20" value="${sheet.level}" /><small>NIVEL</small></label>
+        <label><input name="${name("background")}" value="${value("background")}" /><small>TRASFONDO</small></label>
+        <label><input name="${name("playerName")}" value="${value("playerName")}" /><small>JUGADOR</small></label>
+        <label><input name="${name("race")}" value="${value("race")}" /><small>RAZA</small></label>
+        <label><input name="${name("alignment")}" value="${value("alignment")}" /><small>ALINEAMIENTO</small></label>
+        <label><input name="${name("experience")}" value="${value("experience")}" /><small>EXPERIENCIA</small></label>
+      </div>
+      <datalist id="dnd5e-classes-${index}">${Object.keys(DND5E_CLASS_SAVES).map((className) => `<option value="${className[0].toUpperCase()}${className.slice(1)}"></option>`).join("")}</datalist>
+    </div>
+    <div class="dnd5e-sheet-grid dnd5e-editor-grid">
+      <div class="dnd5e-abilities">${DND5E_ABILITIES.map(([key, label]) => `<label class="dnd5e-ability"><small>${label.toUpperCase()}</small><output data-5e-modifier="${key}">${signedDnd5e(dnd5eModifier(sheet.abilities[key]))}</output><input data-5e-ability="${key}" name="${name(`ability_${key}`)}" type="number" min="1" max="30" value="${sheet.abilities[key]}" aria-label="Puntuacion de ${label}" /></label>`).join("")}</div>
+      <div class="dnd5e-checks">
+        <label class="dnd5e-inspiration"><input name="${name("inspiration")}" type="checkbox" ${sheet.inspiration ? "checked" : ""} /><b>INSPIRACION</b></label>
+        <div class="dnd5e-proficiency"><output data-5e-proficiency>${signedDnd5e(proficiency)}</output><span>BONO DE COMPETENCIA</span></div>
+        <section class="dnd5e-paper-box"><h4>TIRADAS DE SALVACION</h4>${DND5E_ABILITIES.map(([key, label]) => `<label class="dnd5e-check-row"><input data-5e-save="${key}" name="${name(`save_${key}`)}" type="checkbox" ${sheet.saveProficiencies.includes(key) ? "checked" : ""} /><output data-5e-save-total="${key}">${signedDnd5e(modifier(key) + (sheet.saveProficiencies.includes(key) ? proficiency : 0))}</output><span>${label}</span></label>`).join("")}</section>
+        <section class="dnd5e-paper-box dnd5e-skills"><h4>HABILIDADES</h4>${DND5E_SKILLS.map(([key, label, ability]) => `<label class="dnd5e-check-row"><input data-5e-skill="${key}" data-ability="${ability}" name="${name(`skill_${key}`)}" type="checkbox" ${sheet.skillProficiencies.includes(key) ? "checked" : ""} /><output data-5e-skill-total="${key}">${signedDnd5e(skillTotal(key, ability))}</output><span>${label} <small>(${DND5E_ABILITIES.find(([item]) => item === ability)?.[2]})</small></span></label>`).join("")}</section>
+        <div class="dnd5e-passive"><output data-5e-passive>${10 + skillTotal("perception", "wis")}</output><span>SABIDURIA PASIVA (PERCEPCION)</span></div>
+      </div>
+      <div class="dnd5e-main-sheet">
+        <div class="dnd5e-combat-row">
+          <div><output data-5e-armor>${(Number(sheet.armorBase) || 10) + modifier("dex") + (Number(sheet.armorBonus) || 0)}</output><span>CLASE DE ARMADURA</span></div>
+          <div><output data-5e-initiative>${signedDnd5e(modifier("dex"))}</output><span>INICIATIVA</span></div>
+          <label><input data-5e-speed name="${name("speed")}" type="number" min="0" value="${Number(sheet.speed) || 30}" /><span>VELOCIDAD (PIES)</span></label>
+        </div>
+        <div class="dnd5e-armor-settings">
+          <label>Base de armadura <input data-5e-armor-base name="${name("armorBase")}" type="number" value="${Number(sheet.armorBase) || 10}" /></label>
+          <span>+ modificador DES +</span>
+          <label>Bonificador extra <input data-5e-armor-bonus name="${name("armorBonus")}" type="number" value="${Number(sheet.armorBonus) || 0}" /></label>
+        </div>
+        <div class="dnd5e-hp-grid">${[["maxHp", "PG MAXIMOS"], ["currentHp", "PG ACTUALES"], ["temporaryHp", "PG TEMPORALES"], ["hitDice", "DADOS DE GOLPE"], ["deathSuccesses", "SALVACIONES EXITOSAS"], ["deathFailures", "SALVACIONES FALLIDAS"]].map(([field, label]) => `<label><small>${label}</small><input name="${name(field)}" ${field.startsWith("death") ? 'type="number" min="0" max="3"' : ""} value="${value(field)}" /></label>`).join("")}</div>
+        <div class="dnd5e-notes-grid">${[["attacks", "Ataques y conjuros"], ["personality", "Rasgos de personalidad"], ["ideals", "Ideales"], ["bonds", "Vinculos"], ["flaws", "Defectos"], ["proficiencies", "Otras competencias e idiomas"], ["equipment", "Equipo"], ["features", "Rasgos y capacidades"]].map(([field, label]) => `<label class="dnd5e-paper-box"><textarea name="${name(field)}" placeholder="${label}">${escapeHtml(sheet[field] || "")}</textarea><h4>${label.toUpperCase()}</h4></label>`).join("")}</div>
+      </div>
+    </div>
+    <input type="hidden" name="block_text_${index}" value="" />
+    <input type="hidden" name="block_url_${index}" value="" />
+  </div>`;
+}
+
 function wikiContentEditorBlock(block, index) {
   const type = WIKI_CONTENT_TYPES[block.type] || WIKI_CONTENT_TYPES.text;
   const supportsImage = block.type === "image" || block.type === "map";
@@ -2166,12 +2347,12 @@ function wikiContentEditorBlock(block, index) {
     <input type="hidden" name="block_type_${index}" value="${escapeAttr(block.type)}" />
     <header><span>${type.icon} ${escapeHtml(type.label)}</span><button type="button" data-action="remove-content-block" aria-label="Quitar bloque">×</button></header>
     <label class="field"><span>Título editable</span><input class="input wiki-block-title" name="block_title_${index}" value="${escapeAttr(block.title || type.title)}" placeholder="Título de la sección" /></label>
-    ${supportsImage ? `<div class="wiki-block-media-fields">
+    ${block.type === "characterSheet5e" ? characterSheet5eEditor(block, index) : supportsImage ? `<div class="wiki-block-media-fields">
       <label class="field"><span>URL de imagen</span><input class="input" name="block_url_${index}" type="url" value="${escapeAttr(String(block.url || "").startsWith("data:") ? "" : block.url || "")}" placeholder="https://..." /></label>
       <label class="field"><span>o subir archivo</span><input class="input" name="block_file_${index}" type="file" accept="image/*" /></label>
       <input type="hidden" name="block_existing_url_${index}" value="${escapeAttr(block.url || "")}" />
     </div>` : `<input type="hidden" name="block_url_${index}" value="" />`}
-    <label class="field"><span>${supportsImage ? "Texto, leyenda o notas" : "Contenido editable"}</span><textarea class="textarea wiki-description-input" name="block_text_${index}" placeholder="${escapeAttr(type.placeholder)}">${escapeHtml(block.text || "")}</textarea></label>
+    ${block.type === "characterSheet5e" ? "" : `<label class="field"><span>${supportsImage ? "Texto, leyenda o notas" : "Contenido editable"}</span><textarea class="textarea wiki-description-input" name="block_text_${index}" placeholder="${escapeAttr(type.placeholder)}">${escapeHtml(block.text || "")}</textarea></label>`}
   </article>`;
 }
 
@@ -2682,7 +2863,48 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+function refreshCharacterSheet5e(editor, inferClassSaves = false) {
+  if (!editor) return;
+  const level = Number(editor.querySelector("[data-5e-level]")?.value) || 1;
+  const proficiency = dnd5eProficiencyBonus(level);
+  const scores = Object.fromEntries(DND5E_ABILITIES.map(([key]) => [key, Number(editor.querySelector(`[data-5e-ability="${key}"]`)?.value) || 10]));
+  const modifier = (key) => dnd5eModifier(scores[key]);
+
+  if (inferClassSaves) {
+    const className = normalizeSearchText(editor.querySelector("[data-5e-class]")?.value || "");
+    const classSaves = DND5E_CLASS_SAVES[className];
+    if (classSaves) editor.querySelectorAll("[data-5e-save]").forEach((input) => { input.checked = classSaves.includes(input.getAttribute("data-5e-save")); });
+  }
+
+  const proficiencyOutput = editor.querySelector("[data-5e-proficiency]");
+  if (proficiencyOutput) proficiencyOutput.textContent = signedDnd5e(proficiency);
+  DND5E_ABILITIES.forEach(([key]) => {
+    const modifierOutput = editor.querySelector(`[data-5e-modifier="${key}"]`);
+    const saveInput = editor.querySelector(`[data-5e-save="${key}"]`);
+    const saveOutput = editor.querySelector(`[data-5e-save-total="${key}"]`);
+    if (modifierOutput) modifierOutput.textContent = signedDnd5e(modifier(key));
+    if (saveOutput) saveOutput.textContent = signedDnd5e(modifier(key) + (saveInput?.checked ? proficiency : 0));
+  });
+  DND5E_SKILLS.forEach(([key, , ability]) => {
+    const skillInput = editor.querySelector(`[data-5e-skill="${key}"]`);
+    const skillOutput = editor.querySelector(`[data-5e-skill-total="${key}"]`);
+    if (skillOutput) skillOutput.textContent = signedDnd5e(modifier(ability) + (skillInput?.checked ? proficiency : 0));
+  });
+  const perception = editor.querySelector('[data-5e-skill="perception"]');
+  const passiveOutput = editor.querySelector("[data-5e-passive]");
+  if (passiveOutput) passiveOutput.textContent = String(10 + modifier("wis") + (perception?.checked ? proficiency : 0));
+  const initiativeOutput = editor.querySelector("[data-5e-initiative]");
+  if (initiativeOutput) initiativeOutput.textContent = signedDnd5e(modifier("dex"));
+  const armorBase = Number(editor.querySelector("[data-5e-armor-base]")?.value) || 10;
+  const armorBonus = Number(editor.querySelector("[data-5e-armor-bonus]")?.value) || 0;
+  const armorOutput = editor.querySelector("[data-5e-armor]");
+  if (armorOutput) armorOutput.textContent = String(armorBase + modifier("dex") + armorBonus);
+}
+
 document.addEventListener("change", (event) => {
+  const sheetEditor = event.target.closest("[data-5e-sheet-editor]");
+  if (sheetEditor) refreshCharacterSheet5e(sheetEditor, event.target.matches("[data-5e-class]"));
+
   const fileInput = event.target.closest('.wiki-card-form input[name="imageFile"]');
   const file = fileInput?.files?.[0];
   const preview = fileInput?.closest("form")?.querySelector(".wiki-image-preview");
@@ -2697,6 +2919,9 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("input", (event) => {
+  const sheetEditor = event.target.closest("[data-5e-sheet-editor]");
+  if (sheetEditor) refreshCharacterSheet5e(sheetEditor);
+
   const titleInput = event.target.closest('.wiki-card-form input[name="title"]');
   if (titleInput) {
     const primaryAlias = titleInput.closest("form")?.querySelector("[data-primary-alias]");
@@ -3071,6 +3296,38 @@ function wikiPropertyItemsFromData(data) {
   })).filter((item) => item.label);
 }
 
+function characterSheet5eFromData(data, index) {
+  const field = (key) => data[`block_sheet_${index}_${key}`];
+  return normalizedCharacterSheet5e({
+    type: "characterSheet5e",
+    sheet: {
+      characterName: String(field("characterName") || "").trim(),
+      className: String(field("className") || "").trim(),
+      level: Number(field("level")) || 1,
+      background: String(field("background") || "").trim(),
+      playerName: String(field("playerName") || "").trim(),
+      race: String(field("race") || "").trim(),
+      alignment: String(field("alignment") || "").trim(),
+      experience: String(field("experience") || "").trim(),
+      abilities: Object.fromEntries(DND5E_ABILITIES.map(([key]) => [key, Number(field(`ability_${key}`)) || 10])),
+      saveProficiencies: DND5E_ABILITIES.map(([key]) => key).filter((key) => Boolean(field(`save_${key}`))),
+      skillProficiencies: DND5E_SKILLS.map(([key]) => key).filter((key) => Boolean(field(`skill_${key}`))),
+      inspiration: Boolean(field("inspiration")),
+      armorBase: Number(field("armorBase")) || 10,
+      armorBonus: Number(field("armorBonus")) || 0,
+      speed: Number(field("speed")) || 30,
+      maxHp: String(field("maxHp") || "").trim(), currentHp: String(field("currentHp") || "").trim(),
+      temporaryHp: String(field("temporaryHp") || "").trim(), hitDice: String(field("hitDice") || "").trim(),
+      deathSuccesses: Math.max(0, Math.min(3, Number(field("deathSuccesses")) || 0)),
+      deathFailures: Math.max(0, Math.min(3, Number(field("deathFailures")) || 0)),
+      attacks: String(field("attacks") || "").trim(), personality: String(field("personality") || "").trim(),
+      ideals: String(field("ideals") || "").trim(), bonds: String(field("bonds") || "").trim(), flaws: String(field("flaws") || "").trim(),
+      proficiencies: String(field("proficiencies") || "").trim(), equipment: String(field("equipment") || "").trim(),
+      features: String(field("features") || "").trim(),
+    },
+  });
+}
+
 async function wikiContentBlocksFromData(data) {
   const indexes = Object.keys(data)
     .map((key) => key.match(/^block_type_(.+)$/)?.[1])
@@ -3103,6 +3360,7 @@ async function wikiContentBlocksFromData(data) {
       title: String(data[`block_title_${index}`] || WIKI_CONTENT_TYPES[type].title).trim(),
       text: String(data[`block_text_${index}`] || "").trim(),
       url,
+      sheet: type === "characterSheet5e" ? characterSheet5eFromData(data, index) : undefined,
     });
   }
   return blocks;
