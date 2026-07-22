@@ -944,7 +944,8 @@ function defaultCharacterSheet5e() {
     abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
     saveProficiencies: [], skillProficiencies: [], inspiration: false,
     armorBase: 10, armorBonus: 0, speed: 30, maxHp: "", currentHp: "", temporaryHp: "", hitDice: "", deathSuccesses: 0, deathFailures: 0,
-    attacks: "", personality: "", ideals: "", bonds: "", flaws: "", proficiencies: "", equipment: "", features: "",
+    attacks: "", spellcastingAbility: "int", spells: Object.fromEntries(Array.from({ length: 10 }, (_, level) => [level, []])),
+    personality: "", ideals: "", bonds: "", flaws: "", proficiencies: "", features: "",
   };
 }
 
@@ -952,11 +953,18 @@ function normalizedCharacterSheet5e(block) {
   const defaults = defaultCharacterSheet5e();
   const sheet = block?.sheet && typeof block.sheet === "object" ? block.sheet : {};
   const abilities = Object.fromEntries(DND5E_ABILITIES.map(([key]) => [key, Math.max(1, Math.min(30, Number(sheet.abilities?.[key]) || 10))]));
+  const spells = Object.fromEntries(Array.from({ length: 10 }, (_, level) => [level, (Array.isArray(sheet.spells?.[level]) ? sheet.spells[level] : []).map((spell, spellIndex) => ({
+    id: String(spell?.id || `spell-${level}-${spellIndex}`),
+    name: String(spell?.name || ""),
+    notes: String(spell?.notes || ""),
+  })).filter((spell) => spell.name.trim())]));
   return {
     ...defaults,
     ...sheet,
     level: Math.max(1, Math.min(20, Number(sheet.level) || 1)),
     abilities,
+    spells,
+    spellcastingAbility: DND5E_ABILITIES.some(([key]) => key === sheet.spellcastingAbility) ? sheet.spellcastingAbility : "int",
     saveProficiencies: Array.isArray(sheet.saveProficiencies) ? sheet.saveProficiencies.filter((key) => DND5E_ABILITIES.some(([ability]) => ability === key)) : [],
     skillProficiencies: Array.isArray(sheet.skillProficiencies) ? sheet.skillProficiencies.filter((key) => DND5E_SKILLS.some(([skill]) => skill === key)) : [],
     features: String(sheet.features || (!block?.sheet ? block?.text || "" : "")),
@@ -1462,6 +1470,9 @@ function renderCharacterSheet5e(block) {
   const skillValue = (key, ability) => abilityModifier(ability) + (sheet.skillProficiencies.includes(key) ? proficiency : 0);
   const passivePerception = 10 + skillValue("perception", "wis");
   const safeText = (value, fallback = "-") => escapeHtml(String(value || fallback)).replaceAll("\n", "<br />");
+  const spellAbilityModifier = abilityModifier(sheet.spellcastingAbility);
+  const spellSaveDc = 8 + proficiency + spellAbilityModifier;
+  const spellAttackBonus = proficiency + spellAbilityModifier;
 
   return `<div class="dnd5e-sheet dnd5e-sheet-view">
     <div class="dnd5e-sheet-banner">
@@ -1475,13 +1486,14 @@ function renderCharacterSheet5e(block) {
         <span><b>${safeText(sheet.experience)}</b><small>EXPERIENCIA</small></span>
       </div>
     </div>
-    <div class="dnd5e-sheet-grid">
+    <nav class="dnd5e-page-tabs"><button class="active" type="button" data-action="set-5e-sheet-page" data-page="main">Ficha principal</button><button type="button" data-action="set-5e-sheet-page" data-page="spells">Ataques y conjuros</button></nav>
+    <div data-5e-page-panel="main"><div class="dnd5e-sheet-grid">
       <div class="dnd5e-abilities">${DND5E_ABILITIES.map(([key, label]) => `<div class="dnd5e-ability"><small>${label.toUpperCase()}</small><strong>${signedDnd5e(abilityModifier(key))}</strong><span>${sheet.abilities[key]}</span></div>`).join("")}</div>
       <div class="dnd5e-checks">
         <div class="dnd5e-inspiration"><span class="${sheet.inspiration ? "active" : ""}">${sheet.inspiration ? "X" : ""}</span><b>INSPIRACION</b></div>
         <div class="dnd5e-proficiency"><strong>${signedDnd5e(proficiency)}</strong><span>BONO DE COMPETENCIA</span></div>
         <section class="dnd5e-paper-box"><h4>TIRADAS DE SALVACION</h4>${DND5E_ABILITIES.map(([key, label]) => `<div class="dnd5e-check-row"><i class="${sheet.saveProficiencies.includes(key) ? "trained" : ""}"></i><b>${signedDnd5e(abilityModifier(key) + (sheet.saveProficiencies.includes(key) ? proficiency : 0))}</b><span>${label}</span></div>`).join("")}</section>
-        <section class="dnd5e-paper-box dnd5e-skills"><h4>HABILIDADES</h4>${DND5E_SKILLS.map(([key, label, ability]) => `<div class="dnd5e-check-row"><i class="${sheet.skillProficiencies.includes(key) ? "trained" : ""}"></i><b>${signedDnd5e(skillValue(key, ability))}</b><span>${label} <small>(${DND5E_ABILITIES.find(([item]) => item === ability)?.[2]})</small></span></div>`).join("")}</section>
+        <details class="dnd5e-paper-box dnd5e-skills"><summary>HABILIDADES <small>desplegar</small></summary><div>${DND5E_SKILLS.map(([key, label, ability]) => `<div class="dnd5e-check-row"><i class="${sheet.skillProficiencies.includes(key) ? "trained" : ""}"></i><b>${signedDnd5e(skillValue(key, ability))}</b><span>${label} <small>(${DND5E_ABILITIES.find(([item]) => item === ability)?.[2]})</small></span></div>`).join("")}</div></details>
         <div class="dnd5e-passive"><strong>${passivePerception}</strong><span>SABIDURIA PASIVA (PERCEPCION)</span></div>
       </div>
       <div class="dnd5e-main-sheet">
@@ -1495,13 +1507,18 @@ function renderCharacterSheet5e(block) {
           <div><small>PG ACTUALES</small><strong>${safeText(sheet.currentHp)}</strong></div>
           <div><small>PG TEMPORALES</small><strong>${safeText(sheet.temporaryHp)}</strong></div>
           <div><small>DADOS DE GOLPE</small><strong>${safeText(sheet.hitDice)}</strong></div>
-          <div><small>SALVACIONES EXITOSAS</small><strong>${Math.max(0, Math.min(3, Number(sheet.deathSuccesses) || 0))} / 3</strong></div>
-          <div><small>SALVACIONES FALLIDAS</small><strong>${Math.max(0, Math.min(3, Number(sheet.deathFailures) || 0))} / 3</strong></div>
+          <div class="dnd5e-death-save"><small>SALVACIONES EXITOSAS</small><span>${Array.from({ length: 3 }, (_, slot) => `<i class="${slot < Number(sheet.deathSuccesses) ? "filled" : ""}"></i>`).join("")}</span></div>
+          <div class="dnd5e-death-save"><small>SALVACIONES FALLIDAS</small><span>${Array.from({ length: 3 }, (_, slot) => `<i class="${slot < Number(sheet.deathFailures) ? "filled" : ""}"></i>`).join("")}</span></div>
         </div>
         <div class="dnd5e-notes-grid">
-          ${[["Ataques y conjuros", sheet.attacks], ["Rasgos de personalidad", sheet.personality], ["Ideales", sheet.ideals], ["Vinculos", sheet.bonds], ["Defectos", sheet.flaws], ["Otras competencias e idiomas", sheet.proficiencies], ["Equipo", sheet.equipment], ["Rasgos y capacidades", sheet.features]].map(([label, value]) => `<section class="dnd5e-paper-box"><div>${safeText(value, "Sin completar")}</div><h4>${label.toUpperCase()}</h4></section>`).join("")}
+          ${[["Rasgos de personalidad", sheet.personality], ["Ideales", sheet.ideals], ["Vinculos", sheet.bonds], ["Defectos", sheet.flaws], ["Otras competencias e idiomas", sheet.proficiencies], ["Rasgos y capacidades", sheet.features]].map(([label, value]) => `<section class="dnd5e-paper-box"><div>${safeText(value, "Sin completar")}</div><h4>${label.toUpperCase()}</h4></section>`).join("")}
         </div>
       </div>
+    </div></div>
+    <div class="dnd5e-spell-page" data-5e-page-panel="spells" hidden>
+      <div class="dnd5e-spell-head"><section><strong>${DND5E_ABILITIES.find(([key]) => key === sheet.spellcastingAbility)?.[2]}</strong><span>CARACTERISTICA MAGICA</span></section><section><strong>${spellSaveDc}</strong><span>CD SALVACION</span></section><section><strong>${signedDnd5e(spellAttackBonus)}</strong><span>BONO DE ATAQUE</span></section></div>
+      <section class="dnd5e-paper-box dnd5e-attacks"><div>${safeText(sheet.attacks, "Sin ataques cargados")}</div><h4>ATAQUES</h4></section>
+      <div class="dnd5e-spell-levels">${Array.from({ length: 10 }, (_, level) => `<details class="dnd5e-spell-level" ${level === 0 ? "open" : ""}><summary><b>${level === 0 ? "Trucos" : `Nivel ${level}`}</b><span>${sheet.spells[level].length} conjuros</span></summary><div>${sheet.spells[level].map((spell) => `<details class="dnd5e-spell"><summary>${escapeHtml(spell.name)}</summary><p>${safeText(spell.notes, "Sin notas")}</p></details>`).join("") || `<p class="dnd5e-empty-spells">Sin conjuros en este nivel.</p>`}</div></details>`).join("")}</div>
     </div>
   </div>`;
 }
@@ -2288,6 +2305,16 @@ function wikiPropertyEditorRow(item, index) {
   </div>`;
 }
 
+function characterSpellEditorRow(blockIndex, level, spell, rowKey) {
+  const prefix = `block_sheet_${blockIndex}_spell_${level}_${rowKey}`;
+  return `<div class="dnd5e-spell-editor-row" data-5e-spell-row>
+    <input type="hidden" name="${prefix}_id" value="${escapeAttr(spell.id || uid("spell"))}" />
+    <label><span>Nombre</span><input name="${prefix}_name" value="${escapeAttr(spell.name || "")}" placeholder="Nombre del conjuro" /></label>
+    <label><span>Detalle desplegable</span><textarea name="${prefix}_notes" placeholder="Tiempo de lanzamiento, alcance, componentes, efecto...">${escapeHtml(spell.notes || "")}</textarea></label>
+    <button type="button" data-action="remove-5e-spell" aria-label="Quitar conjuro">×</button>
+  </div>`;
+}
+
 function characterSheet5eEditor(block, index) {
   const sheet = normalizedCharacterSheet5e(block);
   const name = (field) => `block_sheet_${index}_${field}`;
@@ -2295,6 +2322,7 @@ function characterSheet5eEditor(block, index) {
   const proficiency = dnd5eProficiencyBonus(sheet.level);
   const modifier = (key) => dnd5eModifier(sheet.abilities[key]);
   const skillTotal = (key, ability) => modifier(ability) + (sheet.skillProficiencies.includes(key) ? proficiency : 0);
+  const spellModifier = modifier(sheet.spellcastingAbility);
   return `<div class="dnd5e-sheet dnd5e-sheet-editor" data-5e-sheet-editor>
     <div class="dnd5e-editor-note"><strong>Calculos automaticos</strong><span>Al cambiar nivel o caracteristicas se actualizan modificadores, competencia, salvaciones, habilidades, iniciativa, percepcion pasiva y armadura.</span></div>
     <div class="dnd5e-sheet-banner dnd5e-editor-banner">
@@ -2310,13 +2338,14 @@ function characterSheet5eEditor(block, index) {
       </div>
       <datalist id="dnd5e-classes-${index}">${Object.keys(DND5E_CLASS_SAVES).map((className) => `<option value="${className[0].toUpperCase()}${className.slice(1)}"></option>`).join("")}</datalist>
     </div>
-    <div class="dnd5e-sheet-grid dnd5e-editor-grid">
+    <nav class="dnd5e-page-tabs"><button class="active" type="button" data-action="set-5e-sheet-page" data-page="main">Ficha principal</button><button type="button" data-action="set-5e-sheet-page" data-page="spells">Ataques y conjuros</button></nav>
+    <div data-5e-page-panel="main"><div class="dnd5e-sheet-grid dnd5e-editor-grid">
       <div class="dnd5e-abilities">${DND5E_ABILITIES.map(([key, label]) => `<label class="dnd5e-ability"><small>${label.toUpperCase()}</small><output data-5e-modifier="${key}">${signedDnd5e(dnd5eModifier(sheet.abilities[key]))}</output><input data-5e-ability="${key}" name="${name(`ability_${key}`)}" type="number" min="1" max="30" value="${sheet.abilities[key]}" aria-label="Puntuacion de ${label}" /></label>`).join("")}</div>
       <div class="dnd5e-checks">
         <label class="dnd5e-inspiration"><input name="${name("inspiration")}" type="checkbox" ${sheet.inspiration ? "checked" : ""} /><b>INSPIRACION</b></label>
         <div class="dnd5e-proficiency"><output data-5e-proficiency>${signedDnd5e(proficiency)}</output><span>BONO DE COMPETENCIA</span></div>
         <section class="dnd5e-paper-box"><h4>TIRADAS DE SALVACION</h4>${DND5E_ABILITIES.map(([key, label]) => `<label class="dnd5e-check-row"><input data-5e-save="${key}" name="${name(`save_${key}`)}" type="checkbox" ${sheet.saveProficiencies.includes(key) ? "checked" : ""} /><output data-5e-save-total="${key}">${signedDnd5e(modifier(key) + (sheet.saveProficiencies.includes(key) ? proficiency : 0))}</output><span>${label}</span></label>`).join("")}</section>
-        <section class="dnd5e-paper-box dnd5e-skills"><h4>HABILIDADES</h4>${DND5E_SKILLS.map(([key, label, ability]) => `<label class="dnd5e-check-row"><input data-5e-skill="${key}" data-ability="${ability}" name="${name(`skill_${key}`)}" type="checkbox" ${sheet.skillProficiencies.includes(key) ? "checked" : ""} /><output data-5e-skill-total="${key}">${signedDnd5e(skillTotal(key, ability))}</output><span>${label} <small>(${DND5E_ABILITIES.find(([item]) => item === ability)?.[2]})</small></span></label>`).join("")}</section>
+        <details class="dnd5e-paper-box dnd5e-skills"><summary>HABILIDADES <small>desplegar</small></summary><div>${DND5E_SKILLS.map(([key, label, ability]) => `<label class="dnd5e-check-row"><input data-5e-skill="${key}" data-ability="${ability}" name="${name(`skill_${key}`)}" type="checkbox" ${sheet.skillProficiencies.includes(key) ? "checked" : ""} /><output data-5e-skill-total="${key}">${signedDnd5e(skillTotal(key, ability))}</output><span>${label} <small>(${DND5E_ABILITIES.find(([item]) => item === ability)?.[2]})</small></span></label>`).join("")}</div></details>
         <div class="dnd5e-passive"><output data-5e-passive>${10 + skillTotal("perception", "wis")}</output><span>SABIDURIA PASIVA (PERCEPCION)</span></div>
       </div>
       <div class="dnd5e-main-sheet">
@@ -2330,9 +2359,14 @@ function characterSheet5eEditor(block, index) {
           <span>+ modificador DES +</span>
           <label>Bonificador extra <input data-5e-armor-bonus name="${name("armorBonus")}" type="number" value="${Number(sheet.armorBonus) || 0}" /></label>
         </div>
-        <div class="dnd5e-hp-grid">${[["maxHp", "PG MAXIMOS"], ["currentHp", "PG ACTUALES"], ["temporaryHp", "PG TEMPORALES"], ["hitDice", "DADOS DE GOLPE"], ["deathSuccesses", "SALVACIONES EXITOSAS"], ["deathFailures", "SALVACIONES FALLIDAS"]].map(([field, label]) => `<label><small>${label}</small><input name="${name(field)}" ${field.startsWith("death") ? 'type="number" min="0" max="3"' : ""} value="${value(field)}" /></label>`).join("")}</div>
-        <div class="dnd5e-notes-grid">${[["attacks", "Ataques y conjuros"], ["personality", "Rasgos de personalidad"], ["ideals", "Ideales"], ["bonds", "Vinculos"], ["flaws", "Defectos"], ["proficiencies", "Otras competencias e idiomas"], ["equipment", "Equipo"], ["features", "Rasgos y capacidades"]].map(([field, label]) => `<label class="dnd5e-paper-box"><textarea name="${name(field)}" placeholder="${label}">${escapeHtml(sheet[field] || "")}</textarea><h4>${label.toUpperCase()}</h4></label>`).join("")}</div>
+        <div class="dnd5e-hp-grid">${[["maxHp", "PG MAXIMOS"], ["currentHp", "PG ACTUALES"], ["temporaryHp", "PG TEMPORALES"], ["hitDice", "DADOS DE GOLPE"]].map(([field, label]) => `<label><small>${label}</small><input name="${name(field)}" value="${value(field)}" /></label>`).join("")}<div class="dnd5e-death-save"><small>SALVACIONES EXITOSAS</small><span>${Array.from({ length: 3 }, (_, slot) => `<input name="${name(`deathSuccess_${slot}`)}" type="checkbox" ${slot < Number(sheet.deathSuccesses) ? "checked" : ""} aria-label="Salvacion exitosa ${slot + 1}" />`).join("")}</span></div><div class="dnd5e-death-save"><small>SALVACIONES FALLIDAS</small><span>${Array.from({ length: 3 }, (_, slot) => `<input name="${name(`deathFailure_${slot}`)}" type="checkbox" ${slot < Number(sheet.deathFailures) ? "checked" : ""} aria-label="Salvacion fallida ${slot + 1}" />`).join("")}</span></div></div>
+        <div class="dnd5e-notes-grid">${[["personality", "Rasgos de personalidad"], ["ideals", "Ideales"], ["bonds", "Vinculos"], ["flaws", "Defectos"], ["proficiencies", "Otras competencias e idiomas"], ["features", "Rasgos y capacidades"]].map(([field, label]) => `<label class="dnd5e-paper-box"><textarea name="${name(field)}" placeholder="${label}">${escapeHtml(sheet[field] || "")}</textarea><h4>${label.toUpperCase()}</h4></label>`).join("")}</div>
       </div>
+    </div></div>
+    <div class="dnd5e-spell-page" data-5e-page-panel="spells" hidden>
+      <div class="dnd5e-spell-head"><label><select data-5e-spell-ability name="${name("spellcastingAbility")}">${DND5E_ABILITIES.map(([key, label, short]) => `<option value="${key}" ${sheet.spellcastingAbility === key ? "selected" : ""}>${label} (${short})</option>`).join("")}</select><span>CARACTERISTICA MAGICA</span></label><section><output data-5e-spell-dc>${8 + proficiency + spellModifier}</output><span>CD SALVACION</span></section><section><output data-5e-spell-attack>${signedDnd5e(proficiency + spellModifier)}</output><span>BONO DE ATAQUE</span></section></div>
+      <label class="dnd5e-paper-box dnd5e-attacks"><textarea name="${name("attacks")}" placeholder="Armas, bonificadores, dano y notas de ataque">${escapeHtml(sheet.attacks || "")}</textarea><h4>ATAQUES</h4></label>
+      <div class="dnd5e-spell-levels">${Array.from({ length: 10 }, (_, level) => `<details class="dnd5e-spell-level" ${level === 0 ? "open" : ""}><summary><b>${level === 0 ? "Trucos" : `Nivel ${level}`}</b><span>${sheet.spells[level].length} conjuros</span></summary><div data-5e-spell-list>${sheet.spells[level].map((spell, rowKey) => characterSpellEditorRow(index, level, spell, rowKey)).join("")}</div><button class="dnd5e-add-spell" type="button" data-action="add-5e-spell" data-block-index="${index}" data-spell-level="${level}">＋ Agregar conjuro</button></details>`).join("")}</div>
     </div>
     <input type="hidden" name="block_text_${index}" value="" />
     <input type="hidden" name="block_url_${index}" value="" />
@@ -2769,6 +2803,23 @@ document.addEventListener("click", async (event) => {
     target.closest("[data-content-block]")?.remove();
   }
 
+  if (action === "set-5e-sheet-page") {
+    const sheet = target.closest(".dnd5e-sheet");
+    const page = target.dataset.page === "spells" ? "spells" : "main";
+    sheet?.querySelectorAll(".dnd5e-page-tabs button").forEach((button) => button.classList.toggle("active", button.dataset.page === page));
+    sheet?.querySelectorAll("[data-5e-page-panel]").forEach((panel) => { panel.hidden = panel.getAttribute("data-5e-page-panel") !== page; });
+  }
+
+  if (action === "add-5e-spell") {
+    const list = target.closest(".dnd5e-spell-level")?.querySelector("[data-5e-spell-list]");
+    const level = Math.max(0, Math.min(9, Number(target.dataset.spellLevel) || 0));
+    if (list) list.insertAdjacentHTML("beforeend", characterSpellEditorRow(target.dataset.blockIndex, level, { id: uid("spell"), name: "", notes: "" }, Date.now()));
+  }
+
+  if (action === "remove-5e-spell") {
+    target.closest("[data-5e-spell-row]")?.remove();
+  }
+
   if (action === "new-wiki-page") {
     editing = { type: "wiki-type" };
     render();
@@ -2899,6 +2950,11 @@ function refreshCharacterSheet5e(editor, inferClassSaves = false) {
   const armorBonus = Number(editor.querySelector("[data-5e-armor-bonus]")?.value) || 0;
   const armorOutput = editor.querySelector("[data-5e-armor]");
   if (armorOutput) armorOutput.textContent = String(armorBase + modifier("dex") + armorBonus);
+  const spellAbility = editor.querySelector("[data-5e-spell-ability]")?.value || "int";
+  const spellDcOutput = editor.querySelector("[data-5e-spell-dc]");
+  const spellAttackOutput = editor.querySelector("[data-5e-spell-attack]");
+  if (spellDcOutput) spellDcOutput.textContent = String(8 + proficiency + modifier(spellAbility));
+  if (spellAttackOutput) spellAttackOutput.textContent = signedDnd5e(proficiency + modifier(spellAbility));
 }
 
 document.addEventListener("change", (event) => {
@@ -3298,6 +3354,17 @@ function wikiPropertyItemsFromData(data) {
 
 function characterSheet5eFromData(data, index) {
   const field = (key) => data[`block_sheet_${index}_${key}`];
+  const spells = Object.fromEntries(Array.from({ length: 10 }, (_, level) => [level, []]));
+  Object.keys(data).forEach((key) => {
+    const match = key.match(new RegExp(`^block_sheet_${index}_spell_(\\d+)_([^_]+)_name$`));
+    if (!match) return;
+    const level = Number(match[1]);
+    const rowKey = match[2];
+    const name = String(data[key] || "").trim();
+    if (!name || !spells[level]) return;
+    const prefix = `block_sheet_${index}_spell_${level}_${rowKey}`;
+    spells[level].push({ id: String(data[`${prefix}_id`] || uid("spell")), name, notes: String(data[`${prefix}_notes`] || "").trim() });
+  });
   return normalizedCharacterSheet5e({
     type: "characterSheet5e",
     sheet: {
@@ -3313,16 +3380,18 @@ function characterSheet5eFromData(data, index) {
       saveProficiencies: DND5E_ABILITIES.map(([key]) => key).filter((key) => Boolean(field(`save_${key}`))),
       skillProficiencies: DND5E_SKILLS.map(([key]) => key).filter((key) => Boolean(field(`skill_${key}`))),
       inspiration: Boolean(field("inspiration")),
+      spellcastingAbility: String(field("spellcastingAbility") || "int"),
+      spells,
       armorBase: Number(field("armorBase")) || 10,
       armorBonus: Number(field("armorBonus")) || 0,
       speed: Number(field("speed")) || 30,
       maxHp: String(field("maxHp") || "").trim(), currentHp: String(field("currentHp") || "").trim(),
       temporaryHp: String(field("temporaryHp") || "").trim(), hitDice: String(field("hitDice") || "").trim(),
-      deathSuccesses: Math.max(0, Math.min(3, Number(field("deathSuccesses")) || 0)),
-      deathFailures: Math.max(0, Math.min(3, Number(field("deathFailures")) || 0)),
+      deathSuccesses: Array.from({ length: 3 }, (_, slot) => Boolean(field(`deathSuccess_${slot}`))).filter(Boolean).length,
+      deathFailures: Array.from({ length: 3 }, (_, slot) => Boolean(field(`deathFailure_${slot}`))).filter(Boolean).length,
       attacks: String(field("attacks") || "").trim(), personality: String(field("personality") || "").trim(),
       ideals: String(field("ideals") || "").trim(), bonds: String(field("bonds") || "").trim(), flaws: String(field("flaws") || "").trim(),
-      proficiencies: String(field("proficiencies") || "").trim(), equipment: String(field("equipment") || "").trim(),
+      proficiencies: String(field("proficiencies") || "").trim(),
       features: String(field("features") || "").trim(),
     },
   });
