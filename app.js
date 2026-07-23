@@ -385,6 +385,11 @@ let selectedMapId = null;
 let mapSearch = "";
 let mapDrawMode = false;
 let mapRuntime = null;
+let selectedMapPointId = null;
+let mapPointPicker = null;
+let mapElementsHidden = false;
+let mapIgnorePointClickUntil = 0;
+const mapViewMemory = new Map();
 
 function uid(prefix) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}-${Date.now().toString(36)}`;
@@ -1346,6 +1351,7 @@ function teardownWikiGraphs() {
 }
 
 function teardownMapRuntime() {
+  if (mapRuntime?.mapId && mapRuntime.snapshot) mapViewMemory.set(mapRuntime.mapId, mapRuntime.snapshot());
   mapRuntime = null;
 }
 
@@ -1356,7 +1362,8 @@ function initializeMapRuntime() {
   const canvas = viewport.querySelector("[data-map-canvas]");
   const drawing = viewport.querySelector("[data-map-drawing]");
   if (!world || !canvas || !drawing) return;
-  const state = { scale: 1, x: 0, y: 0, gesture: null };
+  const remembered = mapViewMemory.get(viewport.dataset.mapId);
+  const state = { scale: remembered?.scale || 1, x: remembered?.x || 0, y: remembered?.y || 0, gesture: null };
   const apply = () => { world.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale})`; };
   const fitCanvas = () => {
     const image = canvas.querySelector("[data-map-image]");
@@ -1385,7 +1392,13 @@ function initializeMapRuntime() {
     state.scale = next;
     apply();
   };
-  mapRuntime = { zoomBy, reset: () => { state.scale = 1; state.x = 0; state.y = 0; apply(); } };
+  apply();
+  mapRuntime = {
+    mapId: viewport.dataset.mapId,
+    zoomBy,
+    snapshot: () => ({ scale: state.scale, x: state.x, y: state.y }),
+    reset: () => { state.scale = 1; state.x = 0; state.y = 0; apply(); },
+  };
 
   viewport.addEventListener("wheel", (event) => {
     event.preventDefault();
@@ -1393,7 +1406,18 @@ function initializeMapRuntime() {
   }, { passive: false });
 
   viewport.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0 || event.target.closest(".map-point, .map-upload-button")) return;
+    if (event.button !== 0 || event.target.closest(".map-upload-button, .map-overlay-tools, .map-context-picker, .map-point-info")) return;
+    const pointTrigger = event.target.closest(".map-point-trigger");
+    if (pointTrigger) {
+      if (viewport.dataset.canManage !== "true") return;
+      state.gesture = {
+        kind: "move-point", pointerId: event.pointerId, pointId: pointTrigger.dataset.pointId,
+        startX: event.clientX, startY: event.clientY, moved: false,
+      };
+      viewport.setPointerCapture(event.pointerId);
+      return;
+    }
+    if (event.target.closest(".map-point")) return;
     const isDrawing = viewport.dataset.canDraw === "true";
     const rect = canvas.getBoundingClientRect();
     const toPoint = (clientX, clientY) => ({
@@ -1416,6 +1440,20 @@ function initializeMapRuntime() {
       apply();
       return;
     }
+    if (gesture.kind === "move-point") {
+      const distance = Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY);
+      if (distance > 4) gesture.moved = true;
+      if (!gesture.moved) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100));
+      const y = Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100));
+      const point = canvas.querySelector(`.map-point[data-point-id="${gesture.pointId}"]`);
+      if (point) { point.style.left = `${x}%`; point.style.top = `${y}%`; }
+      gesture.x = x;
+      gesture.y = y;
+      event.preventDefault();
+      return;
+    }
     const rect = canvas.getBoundingClientRect();
     gesture.points.push({ x: ((event.clientX - rect.left) / rect.width) * 100, y: ((event.clientY - rect.top) / rect.height) * 100 });
     drawing.innerHTML = `${drawing.innerHTML.replace(/<polyline class="map-current-stroke"[^>]*\/>/, "")}<polyline class="map-current-stroke" points="${gesture.points.map((point) => `${point.x * 10},${point.y * 10}`).join(" ")}" />`;
@@ -1424,7 +1462,10 @@ function initializeMapRuntime() {
   const finish = (event) => {
     const gesture = state.gesture;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
-    if (gesture.kind === "draw" && gesture.points.length > 1) {
+    if (gesture.kind === "move-point" && gesture.moved) {
+      mapIgnorePointClickUntil = Date.now() + 250;
+      moveMapPoint(viewport.dataset.mapId, gesture.pointId, gesture.x, gesture.y);
+    } else if (gesture.kind === "draw" && gesture.points.length > 1) {
       const campaign = campaignById(activeCampaignId);
       const map = mapsFor(campaign).find((item) => item.id === viewport.dataset.mapId);
       if (map) {
@@ -2504,6 +2545,19 @@ function mapImageFor(campaign, map) {
   return map?.imageUrl || "";
 }
 
+function mapDisplayFor(card) {
+  const display = card?.mapDisplay && typeof card.mapDisplay === "object" ? card.mapDisplay : {};
+  return {
+    aliases: display.aliases && typeof display.aliases === "object" ? display.aliases : {},
+    properties: display.properties && typeof display.properties === "object" ? display.properties : {},
+    content: display.content && typeof display.content === "object" ? display.content : {},
+  };
+}
+
+function mapDisplayEnabled(display, group, id) {
+  return display?.[group]?.[id] !== false;
+}
+
 function renderMapUploadControl(map, canManage) {
   if (!map || !canManage) return "";
   return `<label class="button map-upload-button" title="Subir imagen del mapa">Imagen<input data-map-image-file data-map-id="${map.id}" type="file" accept="image/*" /></label>`;
@@ -2545,6 +2599,7 @@ function renderMapsPage(campaign, role, canManage) {
   const visibleMaps = maps.filter((map) => normalizeSearchText(mapCardFor(campaign, map)?.title || "").includes(query));
   const selected = visibleMaps.find((map) => map.id === selectedMapId) || visibleMaps[0] || null;
   if (selected && selectedMapId !== selected.id) selectedMapId = selected.id;
+  if (selected && !(selected.points || []).some((point) => point.id === selectedMapPointId)) selectedMapPointId = null;
   const settings = mapSettings(campaign);
   const isPlayer = role === "player";
 
@@ -2585,14 +2640,51 @@ function renderMapStage(campaign, map, canManage, isPlayer, settings) {
   const points = (map.points || []).map((point) => ({ ...point, card: wikiCardsFor(campaign).find((item) => item.id === point.cardId) })).filter((point) => point.card);
   const strokes = (map.playerStrokes || []).filter((stroke) => Date.now() - Number(stroke.createdAt || 0) < settings.strokeDuration * 1000);
   const mapImage = mapImageFor(campaign, map);
+  const canDraw = canManage || isPlayer && settings.playersCanDraw;
+  const pointPicker = mapPointPicker?.mapId === map.id ? renderMapPointPicker(campaign, mapPointPicker) : "";
   const image = mapImage ? `<img class="map-image" data-map-image draggable="false" src="${escapeAttr(mapImage)}" alt="Mapa ${escapeAttr(card?.title || "Mapa")}" />` : `<div class="map-placeholder-art"><span>⌖</span><strong>${escapeHtml(card?.title || "Mapa")}</strong><small>Subí una imagen para usarla como mapa.</small></div>`;
-  return `<div class="map-viewport" data-map-viewport data-map-id="${map.id}" data-can-manage="${canManage}" data-can-draw="${isPlayer && settings.playersCanDraw && mapDrawMode}" style="--stroke-duration:${settings.strokeDuration}s">${renderMapUploadControl(map, canManage)}
+  return `<div class="map-viewport" data-map-viewport data-map-id="${map.id}" data-can-manage="${canManage}" data-can-draw="${canDraw && mapDrawMode}" style="--stroke-duration:${settings.strokeDuration}s">${renderMapUploadControl(map, canManage)}<div class="map-overlay-tools"><button class="map-tool ${mapElementsHidden ? "active" : ""}" data-action="toggle-map-elements" title="${mapElementsHidden ? "Mostrar elementos" : "Ocultar elementos"}">◉</button>${canManage ? `<button class="button ${mapDrawMode ? "primary" : ""}" data-action="toggle-map-draw">✎ ${mapDrawMode ? "Dibujando" : "Dibujar"}</button>` : ""}</div>${pointPicker}
     <div class="map-world" data-map-world><div class="map-canvas" data-map-canvas>${image}
       <svg class="map-drawing-layer" data-map-drawing viewBox="0 0 1000 1000" preserveAspectRatio="none">${strokes.map((stroke) => `<polyline class="map-player-stroke" points="${stroke.points.map((point) => `${Number(point.x) * 10},${Number(point.y) * 10}`).join(" ")}" style="animation-delay:-${Math.max(0, (Date.now() - stroke.createdAt) / 1000)}s" />`).join("")}</svg>
-      ${points.map((point) => `<button class="map-point" style="left:${Number(point.x)}%;top:${Number(point.y)}%" data-action="open-map-card" data-id="${point.card.id}" title="${escapeAttr(point.card.title)}"><span>${escapeHtml(wikiType(point.card).icon)}</span><b>${escapeHtml(point.card.title)}</b></button>`).join("")}
+      ${mapElementsHidden ? "" : points.map((point) => renderMapPoint(campaign, map, point)).join("")}
     </div></div>
     <div class="map-hint">Arrastrá para mover · Rueda para zoom</div>
   </div>`;
+}
+
+function renderMapPoint(campaign, map, point) {
+  const selected = selectedMapPointId === point.id;
+  return `<div class="map-point ${selected ? "selected" : ""}" data-point-id="${point.id}" style="left:${Number(point.x)}%;top:${Number(point.y)}%">
+    <button class="map-point-trigger" data-action="toggle-map-point" data-id="${point.id}" data-point-id="${point.id}" title="${escapeAttr(point.card.title)}"><span>${escapeHtml(wikiType(point.card).icon)}</span><b>${escapeHtml(point.card.title)}</b></button>
+    ${selected ? renderMapPointInfo(campaign, point) : ""}
+  </div>`;
+}
+
+function renderMapPointInfo(campaign, point) {
+  const card = point.card;
+  const display = mapDisplayFor(card);
+  const aliases = (card.aliases || []).filter((alias) => normalizeSearchText(alias) !== normalizeSearchText(card.title) && mapDisplayEnabled(display, "aliases", alias));
+  const properties = normalizedWikiPropertyItems(card).filter((item) => item.value.trim() && mapDisplayEnabled(display, "properties", item.id));
+  const content = normalizedWikiContentBlocks(card).filter((block) => block.text.trim() && mapDisplayEnabled(display, "content", block.id));
+  const linkedMap = mapsFor(campaign).find((item) => item.cardId === card.id);
+  const linkedMapImage = mapImageFor(campaign, linkedMap);
+  return `<aside class="map-point-info" data-map-point-info>
+    <button class="map-point-info-close" data-action="toggle-map-point" data-id="${point.id}" aria-label="Cerrar">x</button>
+    <header>${card.imageUrl ? `<img src="${escapeAttr(card.imageUrl)}" alt="" />` : `<span>${escapeHtml(wikiType(card).icon)}</span>`}<div><small>${escapeHtml(wikiType(card).label)}</small><strong>${escapeHtml(card.title)}</strong></div></header>
+    ${aliases.length ? `<p class="map-point-aliases">${aliases.map(escapeHtml).join(" · ")}</p>` : ""}
+    ${properties.map((item) => `<p class="map-point-property"><small>${escapeHtml(item.label)}</small><span>${escapeHtml(item.value)}</span></p>`).join("")}
+    ${content.map((block) => `<p class="map-point-content"><small>${escapeHtml(block.title)}</small><span>${escapeHtml(block.text).slice(0, 220)}${block.text.length > 220 ? "..." : ""}</span></p>`).join("")}
+    ${linkedMapImage ? `<button class="map-linked-preview" data-action="go-to-map" data-id="${linkedMap.id}"><img src="${escapeAttr(linkedMapImage)}" alt="Vista previa de ${escapeAttr(card.title)}" /><span>Ir a este mapa</span></button>` : ""}
+  </aside>`;
+}
+
+function renderMapPointPicker(campaign, picker) {
+  const cards = wikiCardsFor(campaign);
+  return `<aside class="map-context-picker" style="left:${picker.left}px;top:${picker.top}px" data-map-context-picker>
+    <header><strong>Vincular tarjeta</strong><button data-action="close-map-picker" aria-label="Cerrar">x</button></header>
+    <label class="map-search"><span>Buscar</span><input data-map-link-search type="search" placeholder="Buscar tarjetas" autofocus /></label>
+    <div class="map-card-picker" data-map-link-list>${cards.map((card) => `<button data-action="add-map-point" data-id="${card.id}">${renderWikiThumb(card)}<span><strong>${escapeHtml(card.title)}</strong><small>${escapeHtml(wikiType(card).label)}</small></span></button>`).join("")}</div>
+  </aside>`;
 }
 
 function renderWikiSettingsPage(campaign, role, canManage) {
@@ -3224,8 +3316,9 @@ function wikiEditorPropertyItems(page, type) {
   return items;
 }
 
-function wikiAliasChip(alias, index) {
-  return `<span class="wiki-alias-chip" data-alias-chip><input type="hidden" name="alias_${index}" value="${escapeAttr(alias)}" /><span>${escapeHtml(alias)}</span><button type="button" data-action="remove-wiki-alias" aria-label="Quitar alias ${escapeAttr(alias)}">×</button></span>`;
+function wikiAliasChip(alias, index, display = {}) {
+  const visible = mapDisplayEnabled(display, "aliases", alias);
+  return `<span class="wiki-alias-chip" data-alias-chip><input type="hidden" name="alias_${index}" value="${escapeAttr(alias)}" /><span>${escapeHtml(alias)}</span><label class="map-display-toggle" title="Mostrar alias en el mapa"><input name="map_show_alias_${index}" type="checkbox" ${visible ? "checked" : ""} />⌖</label><button type="button" data-action="remove-wiki-alias" aria-label="Quitar alias ${escapeAttr(alias)}">×</button></span>`;
 }
 
 function wikiPropertyPicker(type, properties) {
@@ -3241,13 +3334,15 @@ function wikiPropertyPicker(type, properties) {
   </div>`;
 }
 
-function wikiPropertyEditorRow(item, index) {
+function wikiPropertyEditorRow(item, index, display = {}) {
   const icon = item.icon || "◆";
+  const visible = mapDisplayEnabled(display, "properties", item.id);
   return `<div class="wiki-property-editor" data-property-row>
     <input type="hidden" name="property_id_${index}" value="${escapeAttr(item.id || uid("property"))}" />
     <label class="wiki-property-icon" title="Icono de la propiedad"><span>Icono</span><input type="hidden" data-property-icon-input name="property_icon_${index}" value="${escapeAttr(icon)}" /><details class="wiki-icon-picker"><summary data-property-icon-preview>${renderWikiPropertyIcon(icon)}</summary><div><span>Elegí un icono</span><section>${WIKI_PROPERTY_ICONS.map((option) => `<button type="button" data-action="select-wiki-property-icon" data-property-icon="${escapeAttr(option)}">${renderWikiPropertyIcon(option)}</button>`).join("")}</section><label class="wiki-icon-upload">Cargar tu icono<input data-property-icon-file name="property_icon_file_${index}" type="file" accept="image/*" /></label></div></details></label>
     <label class="field"><span>Nombre de propiedad</span><input class="input" name="property_label_${index}" value="${escapeAttr(item.label || "")}" placeholder="Ej: Portador" /></label>
     <label class="field wiki-property-value"><span>Texto o ficha vinculada</span><input class="input" name="property_value_${index}" value="${escapeAttr(item.value || "")}" list="wiki-linkable-cards" placeholder="Escribí texto o el nombre de otra ficha" /></label>
+    <label class="map-display-toggle" title="Mostrar esta propiedad en el mapa"><input name="map_show_property_${escapeAttr(item.id)}" type="checkbox" ${visible ? "checked" : ""} />⌖</label>
     <button class="wiki-row-remove" type="button" data-action="remove-wiki-property" aria-label="Quitar propiedad">×</button>
   </div>`;
 }
@@ -3347,17 +3442,18 @@ function statBlock5eEditor(block, index) {
   </div>`;
 }
 
-function wikiContentEditorBlock(block, index) {
+function wikiContentEditorBlock(block, index, display = {}) {
   const type = WIKI_CONTENT_TYPES[block.type] || WIKI_CONTENT_TYPES.text;
   const supportsImage = block.type === "image";
   const isMapBlock = block.type === "map";
   const campaign = campaignById(activeCampaignId);
   const linkedMap = isMapBlock ? mapsFor(campaign).find((map) => map.cardId === editing?.id) : null;
   const linkedMapImage = mapImageFor(campaign, linkedMap);
+  const visible = mapDisplayEnabled(display, "content", block.id);
   return `<article class="wiki-content-editor" data-content-block>
     <input type="hidden" name="block_id_${index}" value="${escapeAttr(block.id || uid("block"))}" />
     <input type="hidden" name="block_type_${index}" value="${escapeAttr(block.type)}" />
-    <header><span>${type.icon} ${escapeHtml(type.label)}</span><button type="button" data-action="remove-content-block" aria-label="Quitar bloque">×</button></header>
+    <header><span>${type.icon} ${escapeHtml(type.label)}</span><label class="map-display-toggle" title="Mostrar este contenido en el mapa"><input name="map_show_content_${escapeAttr(block.id)}" type="checkbox" ${visible ? "checked" : ""} />⌖</label><button type="button" data-action="remove-content-block" aria-label="Quitar bloque">×</button></header>
     <label class="field"><span>${block.type === "statBlock5e" ? "Nombre de la criatura" : "Título editable"}</span><input class="input wiki-block-title" name="block_title_${index}" value="${escapeAttr(block.title || type.title)}" placeholder="${block.type === "statBlock5e" ? "Nombre de la criatura" : "Título de la sección"}" /></label>
     ${block.type === "characterSheet5e" ? characterSheet5eEditor(block, index) : block.type === "statBlock5e" ? statBlock5eEditor(block, index) : supportsImage ? `<div class="wiki-block-media-fields">
       <label class="field"><span>URL de imagen</span><input class="input" name="block_url_${index}" type="url" value="${escapeAttr(String(block.url || "").startsWith("data:") ? "" : block.url || "")}" placeholder="https://..." /></label>
@@ -3388,6 +3484,7 @@ function renderWikiModal(pageId) {
   const cards = wikiCardsFor(campaign);
   const properties = wikiEditorPropertyItems(page, type);
   const contentBlocks = normalizedWikiContentBlocks(page);
+  const mapDisplay = mapDisplayFor(page);
   const relatedNames = cards.filter((card) => page.relations.includes(card.id)).map((card) => card.title).join(", ");
   const extraAliases = page.aliases.filter((alias) => normalizeSearchText(alias) !== normalizeSearchText(page.title));
 
@@ -3404,17 +3501,17 @@ function renderWikiModal(pageId) {
           <div class="wiki-form-columns">
             <div class="wiki-form-main">
               <label class="field wiki-title-field"><span>Nombre</span><input class="input wiki-title-input" name="title" value="${escapeAttr(page.title)}" placeholder="Ej: Aureon el Radiante" required /></label>
-              <label class="field"><span>Aliases <small>el nombre siempre cuenta como alias</small></span><div class="wiki-alias-editor"><em data-primary-alias>${escapeHtml(page.title || "Nombre de la ficha")}</em><div class="wiki-alias-chips" data-alias-list>${extraAliases.map(wikiAliasChip).join("")}</div><div class="wiki-alias-add"><input class="input" data-wiki-alias-input placeholder="Escribí un alias y agregalo" /><button type="button" data-action="add-wiki-alias">＋</button></div></div></label>
+              <label class="field"><span>Aliases <small>el nombre siempre cuenta como alias</small></span><div class="wiki-alias-editor"><em data-primary-alias>${escapeHtml(page.title || "Nombre de la ficha")}</em><div class="wiki-alias-chips" data-alias-list>${extraAliases.map((alias, index) => wikiAliasChip(alias, index, mapDisplay)).join("")}</div><div class="wiki-alias-add"><input class="input" data-wiki-alias-input placeholder="Escribí un alias y agregalo" /><button type="button" data-action="add-wiki-alias">＋</button></div></div></label>
 
               <section class="wiki-editor-section">
                 <div class="wiki-editor-section-head"><div><span>PROPIEDADES</span><p>El icono, nombre y texto de cada propiedad son editables. Escribí el nombre de otra ficha para vincularla.</p></div></div>
-                <div class="wiki-property-editors" data-property-list>${properties.map(wikiPropertyEditorRow).join("")}</div>
+                <div class="wiki-property-editors" data-property-list>${properties.map((item, index) => wikiPropertyEditorRow(item, index, mapDisplay)).join("")}</div>
                 <div class="wiki-property-add"><button class="wiki-add-property" type="button" data-action="open-wiki-property-picker">＋ Añadir propiedad</button>${wikiPropertyPicker(type, properties)}</div>
               </section>
 
               <section class="wiki-editor-section wiki-content-section">
                 <div class="wiki-editor-section-head"><div><span>CONTENIDO</span><p>Armá la ficha con los módulos que necesites. Sus títulos y textos se pueden editar.</p></div></div>
-                <div class="wiki-content-editors" data-content-list>${contentBlocks.map(wikiContentEditorBlock).join("")}</div>
+                <div class="wiki-content-editors" data-content-list>${contentBlocks.map((block, index) => wikiContentEditorBlock(block, index, mapDisplay)).join("")}</div>
                 <div class="wiki-content-add"><span>Agregar módulo</span><div>${Object.entries(WIKI_CONTENT_TYPES).map(([key, item]) => `<button type="button" data-action="add-content-block" data-block-type="${key}">${item.icon} ${item.label}</button>`).join("")}</div></div>
               </section>
 
@@ -3746,6 +3843,9 @@ document.addEventListener("click", async (event) => {
   if (action === "select-map") {
     selectedMapId = id;
     mapDrawMode = false;
+    selectedMapPointId = null;
+    mapPointPicker = null;
+    mapElementsHidden = false;
     render();
   }
 
@@ -3754,12 +3854,25 @@ document.addEventListener("click", async (event) => {
     render();
   }
 
-  if (action === "open-map-card") {
-    editing = { type: "map-card-preview", cardId: id };
+  if (action === "toggle-map-point") {
+    if (Date.now() < mapIgnorePointClickUntil) return;
+    selectedMapPointId = selectedMapPointId === id ? null : id;
+    mapPointPicker = null;
     render();
   }
 
-  if (action === "add-map-point") addMapPoint(editing?.mapId, id, editing?.x, editing?.y);
+  if (action === "add-map-point") addMapPoint(mapPointPicker?.mapId || editing?.mapId, id, mapPointPicker?.x ?? editing?.x, mapPointPicker?.y ?? editing?.y);
+
+  if (action === "close-map-picker") {
+    mapPointPicker = null;
+    render();
+  }
+
+  if (action === "toggle-map-elements") {
+    mapElementsHidden = !mapElementsHidden;
+    selectedMapPointId = null;
+    render();
+  }
 
   if (action === "go-to-map") {
     selectedMapId = id;
@@ -3991,14 +4104,22 @@ document.addEventListener("click", async (event) => {
 
 document.addEventListener("contextmenu", (event) => {
   const viewport = event.target.closest("[data-map-viewport]");
-  if (!viewport || viewport.dataset.canManage !== "true" || event.target.closest(".map-point, .map-upload-button")) return;
+  if (!viewport || viewport.dataset.canManage !== "true" || event.target.closest(".map-point, .map-upload-button, .map-overlay-tools, .map-context-picker")) return;
   const canvas = viewport.querySelector("[data-map-canvas]");
   if (!canvas) return;
   event.preventDefault();
   const rect = canvas.getBoundingClientRect();
+  const viewportRect = viewport.getBoundingClientRect();
   const x = ((event.clientX - rect.left) / rect.width) * 100;
   const y = ((event.clientY - rect.top) / rect.height) * 100;
-  editing = { type: "map-point", mapId: viewport.dataset.mapId, x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)) };
+  mapPointPicker = {
+    mapId: viewport.dataset.mapId,
+    x: Math.max(0, Math.min(100, x)),
+    y: Math.max(0, Math.min(100, y)),
+    left: Math.max(8, Math.min(viewportRect.width - 300, event.clientX - viewportRect.left + 10)),
+    top: Math.max(8, Math.min(viewportRect.height - 360, event.clientY - viewportRect.top + 10)),
+  };
+  selectedMapPointId = null;
   render();
 });
 
@@ -4474,6 +4595,14 @@ async function saveWikiPage(data) {
     .filter(Boolean)
     .filter((alias, index, list) => list.findIndex((candidate) => normalizeSearchText(candidate) === normalizeSearchText(alias)) === index);
   const contentBlocks = Array.isArray(data.contentBlocks) ? data.contentBlocks : [];
+  const aliasDisplay = Object.entries(data)
+    .filter(([key]) => /^alias_/.test(key))
+    .reduce((result, [key, value]) => ({ ...result, [String(value || "").trim()]: Boolean(data[`map_show_alias_${key.slice(6)}`]) }), {});
+  const mapDisplay = {
+    aliases: aliasDisplay,
+    properties: Object.fromEntries(propertyItems.map((item) => [item.id, Boolean(data[`map_show_property_${item.id}`])])),
+    content: Object.fromEntries(contentBlocks.map((block) => [block.id, Boolean(data[`map_show_content_${block.id}`])])),
+  };
   const description = contentBlocks.find((block) => block.type === "text")?.text || contentBlocks[0]?.text || "";
   const relationNames = splitTags(data.relationNames || "");
   const relationIds = wikiCardsFor(campaign)
@@ -4490,6 +4619,7 @@ async function saveWikiPage(data) {
     properties,
     propertyItems,
     contentBlocks,
+    mapDisplay,
     description,
     content: description,
     imageUrl: String(data.imageUrl || "").trim(),
@@ -4733,11 +4863,25 @@ function addMapPoint(mapId, cardId, x, y) {
   const campaign = campaignById(activeCampaignId);
   const map = mapsFor(campaign).find((item) => item.id === mapId);
   if (!campaign || !map || !canManageCampaign(campaign, currentUser().id)) return;
-  map.points = [...(map.points || []), { id: uid("point"), cardId, x: Math.max(0, Math.min(100, Number(x))), y: Math.max(0, Math.min(100, Number(y))) }];
+  const point = { id: uid("point"), cardId, x: Math.max(0, Math.min(100, Number(x))), y: Math.max(0, Math.min(100, Number(y))) };
+  map.points = [...(map.points || []), point];
   editing = null;
+  mapPointPicker = null;
+  selectedMapPointId = point.id;
   saveState();
   render();
   showToast("Punto interactivo agregado.");
+}
+
+function moveMapPoint(mapId, pointId, x, y) {
+  const campaign = campaignById(activeCampaignId);
+  const map = mapsFor(campaign).find((item) => item.id === mapId);
+  const point = map?.points?.find((item) => item.id === pointId);
+  if (!campaign || !map || !point || !canManageCampaign(campaign, currentUser().id)) return;
+  point.x = Math.max(0, Math.min(100, Number(x)));
+  point.y = Math.max(0, Math.min(100, Number(y)));
+  saveState();
+  render();
 }
 
 async function updateMapImageFromFile(mapId, file) {
