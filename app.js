@@ -1462,9 +1462,18 @@ function initializeMapRuntime() {
   const finish = (event) => {
     const gesture = state.gesture;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
-    if (gesture.kind === "move-point" && gesture.moved) {
+    if (gesture.kind === "move-point") {
       mapIgnorePointClickUntil = Date.now() + 250;
-      moveMapPoint(viewport.dataset.mapId, gesture.pointId, gesture.x, gesture.y);
+      state.gesture = null;
+      if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
+      if (gesture.moved) {
+        moveMapPoint(viewport.dataset.mapId, gesture.pointId, gesture.x, gesture.y);
+      } else {
+        selectedMapPointId = selectedMapPointId === gesture.pointId ? null : gesture.pointId;
+        mapPointPicker = null;
+        render();
+      }
+      return;
     } else if (gesture.kind === "draw" && gesture.points.length > 1) {
       const campaign = campaignById(activeCampaignId);
       const map = mapsFor(campaign).find((item) => item.id === viewport.dataset.mapId);
