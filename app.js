@@ -2258,6 +2258,17 @@ function renderWikiContentBlock(block, cards, currentId) {
   const type = WIKI_CONTENT_TYPES[block.type] || WIKI_CONTENT_TYPES.text;
   const title = escapeHtml(block.title || type.title);
   const text = linkMentions(block.text || "", cards, currentId);
+  if (block.type === "map") {
+    const campaign = campaignForWikiCard(currentId);
+    const linkedMap = mapsFor(campaign).find((map) => map.cardId === currentId);
+    const canManage = campaign ? canManageCampaign(campaign, currentUser()?.id) : false;
+    const mapImage = mapImageFor(campaign, linkedMap);
+    return `<section class="wiki-content-block wiki-content-map">
+      <div class="wiki-content-heading"><span>${type.icon} ${escapeHtml(type.label.toUpperCase())}</span><h2>${title}</h2></div>
+      ${mapImage ? `<button class="wiki-map-preview" data-action="go-to-map" data-id="${linkedMap.id}"><img src="${escapeAttr(mapImage)}" alt="${escapeAttr(block.title || type.label)}" loading="lazy" /></button>` : `<div class="wiki-content-placeholder"><span>${type.icon}</span><small>${linkedMap ? "TodavÃ­a no hay imagen cargada para este mapa." : "CreÃ¡ un mapa interactivo para esta ficha."}</small>${renderWikiMapUploadControl(linkedMap, canManage)}</div>`}
+      ${block.text ? `<p>${text}</p>` : ""}
+    </section>`;
+  }
   if (block.type === "image" || block.type === "map") {
     return `<section class="wiki-content-block wiki-content-${block.type}">
       <div class="wiki-content-heading"><span>${type.icon} ${escapeHtml(type.label.toUpperCase())}</span><h2>${title}</h2></div>
@@ -2490,13 +2501,29 @@ function mapSettings(campaign) {
 }
 
 function mapImageFor(campaign, map) {
-  const card = mapCardFor(campaign, map);
-  return map?.imageUrl || card?.imageUrl || "";
+  return map?.imageUrl || "";
 }
 
 function renderMapUploadControl(map, canManage) {
   if (!map || !canManage) return "";
   return `<label class="button map-upload-button" title="Subir imagen del mapa">Imagen<input data-map-image-file data-map-id="${map.id}" type="file" accept="image/*" /></label>`;
+}
+
+function renderWikiMapUploadControl(map, canManage) {
+  if (!map || !canManage) return "";
+  return `<label class="button wiki-map-upload-button">Cargar mapa<input data-map-image-file data-map-id="${map.id}" type="file" accept="image/*" /></label>`;
+}
+
+function campaignForWikiCard(cardId) {
+  return state.campaigns.find((campaign) => wikiCardsFor(campaign).some((card) => card.id === cardId)) || null;
+}
+
+function ensureWikiMapBlock(card) {
+  if (!card || normalizedWikiContentBlocks(card).some((block) => block.type === "map")) return;
+  card.contentBlocks = [
+    ...normalizedWikiContentBlocks(card),
+    { id: uid("block"), type: "map", title: WIKI_CONTENT_TYPES.map.title, text: "", url: "" },
+  ];
 }
 
 function cleanupMapStrokes(campaign) {
@@ -3322,7 +3349,11 @@ function statBlock5eEditor(block, index) {
 
 function wikiContentEditorBlock(block, index) {
   const type = WIKI_CONTENT_TYPES[block.type] || WIKI_CONTENT_TYPES.text;
-  const supportsImage = block.type === "image" || block.type === "map";
+  const supportsImage = block.type === "image";
+  const isMapBlock = block.type === "map";
+  const campaign = campaignById(activeCampaignId);
+  const linkedMap = isMapBlock ? mapsFor(campaign).find((map) => map.cardId === editing?.id) : null;
+  const linkedMapImage = mapImageFor(campaign, linkedMap);
   return `<article class="wiki-content-editor" data-content-block>
     <input type="hidden" name="block_id_${index}" value="${escapeAttr(block.id || uid("block"))}" />
     <input type="hidden" name="block_type_${index}" value="${escapeAttr(block.type)}" />
@@ -3332,8 +3363,8 @@ function wikiContentEditorBlock(block, index) {
       <label class="field"><span>URL de imagen</span><input class="input" name="block_url_${index}" type="url" value="${escapeAttr(String(block.url || "").startsWith("data:") ? "" : block.url || "")}" placeholder="https://..." /></label>
       <label class="field"><span>o subir archivo</span><input class="input" name="block_file_${index}" type="file" accept="image/*" /></label>
       <input type="hidden" name="block_existing_url_${index}" value="${escapeAttr(block.url || "")}" />
-    </div>` : `<input type="hidden" name="block_url_${index}" value="" />`}
-    ${block.type === "characterSheet5e" || block.type === "statBlock5e" ? `<input type="hidden" name="block_text_${index}" value="" />` : block.type === "familyTree" ? `<input type="hidden" name="block_text_${index}" value="${escapeAttr(block.text || "")}" /><p class="wiki-family-editor-note">El árbol se genera automáticamente con todas las fichas conectadas mediante una propiedad llamada <strong>Familiar</strong>.</p>` : `<label class="field"><span>${block.type === "timeline" ? "Hechos de esta ficha" : supportsImage ? "Texto, leyenda o notas" : "Contenido editable"}</span><textarea class="textarea wiki-description-input" name="block_text_${index}" placeholder="${escapeAttr(type.placeholder)}">${escapeHtml(block.text || "")}</textarea></label>`}
+    </div>` : isMapBlock ? `<div class="wiki-map-module-editor">${linkedMapImage ? `<img src="${escapeAttr(linkedMapImage)}" alt="Vista previa del mapa" />` : `<p>${linkedMap ? "El mÃ³dulo mostrarÃ¡ la imagen del mapa cuando estÃ© cargada." : "GuardÃ¡ esta ficha y creÃ¡ su mapa interactivo para poder mostrarlo aquÃ­."}</p>`}</div><input type="hidden" name="block_url_${index}" value="" />` : `<input type="hidden" name="block_url_${index}" value="" />`}
+    ${block.type === "characterSheet5e" || block.type === "statBlock5e" ? `<input type="hidden" name="block_text_${index}" value="" />` : block.type === "familyTree" ? `<input type="hidden" name="block_text_${index}" value="${escapeAttr(block.text || "")}" /><p class="wiki-family-editor-note">El árbol se genera automáticamente con todas las fichas conectadas mediante una propiedad llamada <strong>Familiar</strong>.</p>` : `<label class="field"><span>${block.type === "timeline" ? "Hechos de esta ficha" : isMapBlock ? "Notas del mapa" : supportsImage ? "Texto, leyenda o notas" : "Contenido editable"}</span><textarea class="textarea wiki-description-input" name="block_text_${index}" placeholder="${escapeAttr(type.placeholder)}">${escapeHtml(block.text || "")}</textarea></label>`}
   </article>`;
 }
 
@@ -4689,6 +4720,7 @@ function createMapFromCard(cardId) {
   if (!items.some((item) => normalizeSearchText(item.label) === "mapa")) items.push({ id: uid("property"), icon: "⌖", label: "Mapa", value: "Mapa interactivo vinculado" });
   card.propertyItems = items;
   card.properties = { ...(card.properties || {}), Mapa: "Mapa interactivo vinculado" };
+  ensureWikiMapBlock(card);
   card.modifiedAt = Date.now();
   selectedMapId = map.id;
   editing = null;
@@ -4722,6 +4754,7 @@ async function updateMapImageFromFile(mapId, file) {
   }
   try {
     map.imageUrl = await readFileAsDataUrl(file);
+    ensureWikiMapBlock(campaign.wiki.find((card) => card.id === map.cardId));
     selectedMapId = map.id;
     saveState();
     render();
