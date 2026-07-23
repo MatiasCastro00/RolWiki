@@ -3830,6 +3830,8 @@ p {
 .map-tools { display: flex; align-items: center; gap: 7px; }
 .map-tool { width: 34px; height: 34px; border: 1px solid rgba(255,255,255,.12); border-radius: 8px; color: #cfdbd8; font-size: 18px; background: rgba(255,255,255,.04); }
 .map-tool:hover { border-color: rgba(104,195,178,.5); background: rgba(104,195,178,.12); }
+.map-upload-button { position: absolute; z-index: 5; left: 14px; top: 13px; display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px; border-radius: 8px; background: rgba(8,14,15,.82); backdrop-filter: blur(10px); }
+.map-upload-button input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
 .map-viewport { position: relative; min-height: 500px; overflow: hidden; touch-action: none; background: radial-gradient(circle at 50% 50%, #203735, #0c1213 72%); cursor: grab; }
 .map-viewport:active { cursor: grabbing; }

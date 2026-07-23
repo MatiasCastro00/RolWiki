@@ -1393,7 +1393,7 @@ function initializeMapRuntime() {
   }, { passive: false });
 
   viewport.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0 || event.target.closest(".map-point")) return;
+    if (event.button !== 0 || event.target.closest(".map-point, .map-upload-button")) return;
     const isDrawing = viewport.dataset.canDraw === "true";
     const rect = canvas.getBoundingClientRect();
     const toPoint = (clientX, clientY) => ({
@@ -2489,6 +2489,16 @@ function mapSettings(campaign) {
   };
 }
 
+function mapImageFor(campaign, map) {
+  const card = mapCardFor(campaign, map);
+  return map?.imageUrl || card?.imageUrl || "";
+}
+
+function renderMapUploadControl(map, canManage) {
+  if (!map || !canManage) return "";
+  return `<label class="button map-upload-button" title="Subir imagen del mapa">Imagen<input data-map-image-file data-map-id="${map.id}" type="file" accept="image/*" /></label>`;
+}
+
 function cleanupMapStrokes(campaign) {
   const duration = mapSettings(campaign).strokeDuration * 1000;
   let changed = false;
@@ -2547,8 +2557,9 @@ function renderMapStage(campaign, map, canManage, isPlayer, settings) {
   const card = mapCardFor(campaign, map);
   const points = (map.points || []).map((point) => ({ ...point, card: wikiCardsFor(campaign).find((item) => item.id === point.cardId) })).filter((point) => point.card);
   const strokes = (map.playerStrokes || []).filter((stroke) => Date.now() - Number(stroke.createdAt || 0) < settings.strokeDuration * 1000);
-  const image = card?.imageUrl ? `<img class="map-image" data-map-image draggable="false" src="${escapeAttr(card.imageUrl)}" alt="Mapa ${escapeAttr(card.title)}" />` : `<div class="map-placeholder-art"><span>⌖</span><strong>${escapeHtml(card?.title || "Mapa")}</strong><small>Agregá una imagen a la tarjeta vinculada para usarla de fondo.</small></div>`;
-  return `<div class="map-viewport" data-map-viewport data-map-id="${map.id}" data-can-manage="${canManage}" data-can-draw="${isPlayer && settings.playersCanDraw && mapDrawMode}" style="--stroke-duration:${settings.strokeDuration}s">
+  const mapImage = mapImageFor(campaign, map);
+  const image = mapImage ? `<img class="map-image" data-map-image draggable="false" src="${escapeAttr(mapImage)}" alt="Mapa ${escapeAttr(card?.title || "Mapa")}" />` : `<div class="map-placeholder-art"><span>⌖</span><strong>${escapeHtml(card?.title || "Mapa")}</strong><small>Subí una imagen para usarla como mapa.</small></div>`;
+  return `<div class="map-viewport" data-map-viewport data-map-id="${map.id}" data-can-manage="${canManage}" data-can-draw="${isPlayer && settings.playersCanDraw && mapDrawMode}" style="--stroke-duration:${settings.strokeDuration}s">${renderMapUploadControl(map, canManage)}
     <div class="map-world" data-map-world><div class="map-canvas" data-map-canvas>${image}
       <svg class="map-drawing-layer" data-map-drawing viewBox="0 0 1000 1000" preserveAspectRatio="none">${strokes.map((stroke) => `<polyline class="map-player-stroke" points="${stroke.points.map((point) => `${Number(point.x) * 10},${Number(point.y) * 10}`).join(" ")}" style="animation-delay:-${Math.max(0, (Date.now() - stroke.createdAt) / 1000)}s" />`).join("")}</svg>
       ${points.map((point) => `<button class="map-point" style="left:${Number(point.x)}%;top:${Number(point.y)}%" data-action="open-map-card" data-id="${point.card.id}" title="${escapeAttr(point.card.title)}"><span>${escapeHtml(wikiType(point.card).icon)}</span><b>${escapeHtml(point.card.title)}</b></button>`).join("")}
@@ -3949,7 +3960,7 @@ document.addEventListener("click", async (event) => {
 
 document.addEventListener("contextmenu", (event) => {
   const viewport = event.target.closest("[data-map-viewport]");
-  if (!viewport || viewport.dataset.canManage !== "true" || event.target.closest(".map-point")) return;
+  if (!viewport || viewport.dataset.canManage !== "true" || event.target.closest(".map-point, .map-upload-button")) return;
   const canvas = viewport.querySelector("[data-map-canvas]");
   if (!canvas) return;
   event.preventDefault();
@@ -4055,6 +4066,13 @@ document.addEventListener("change", (event) => {
       if (preview) preview.innerHTML = renderWikiPropertyIcon(String(reader.result || ""));
     });
     reader.readAsDataURL(iconFile);
+    return;
+  }
+
+  const mapImageInput = event.target.closest("[data-map-image-file]");
+  const mapImageFile = mapImageInput?.files?.[0];
+  if (mapImageInput) {
+    updateMapImageFromFile(mapImageInput.dataset.mapId, mapImageFile);
     return;
   }
 
@@ -4688,6 +4706,29 @@ function addMapPoint(mapId, cardId, x, y) {
   saveState();
   render();
   showToast("Punto interactivo agregado.");
+}
+
+async function updateMapImageFromFile(mapId, file) {
+  const campaign = campaignById(activeCampaignId);
+  const map = mapsFor(campaign).find((item) => item.id === mapId);
+  if (!campaign || !map || !canManageCampaign(campaign, currentUser().id)) return;
+  if (!(file instanceof File) || file.size <= 0 || !file.type.startsWith("image/")) {
+    showToast("ElegÃ­ una imagen para el mapa.");
+    return;
+  }
+  if (file.size > 4 * 1024 * 1024) {
+    showToast("La imagen del mapa debe pesar menos de 4 MB.");
+    return;
+  }
+  try {
+    map.imageUrl = await readFileAsDataUrl(file);
+    selectedMapId = map.id;
+    saveState();
+    render();
+    showToast("Imagen del mapa actualizada.");
+  } catch {
+    showToast("No se pudo leer la imagen del mapa.");
+  }
 }
 
 function createWikiFolder(value) {
