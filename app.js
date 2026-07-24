@@ -390,6 +390,7 @@ let mapPointPicker = null;
 let mapElementsHidden = false;
 let mapIgnorePointClickUntil = 0;
 const mapViewMemory = new Map();
+let pendingWikiImport = null;
 
 function uid(prefix) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}-${Date.now().toString(36)}`;
@@ -2746,6 +2747,11 @@ function renderWikiSettingsPage(campaign, role, canManage) {
           <label class="check-field"><input name="playersCanDrawMaps" type="checkbox" ${mapSettings(campaign).playersCanDraw ? "checked" : ""} /><span>Permitir que los jugadores dibujen trazos temporales</span></label>
           <label class="field"><span>Duración de los trazos (segundos)</span><input class="input" name="mapStrokeDuration" type="number" min="10" max="3600" value="${mapSettings(campaign).strokeDuration}" /></label>
         </div>
+        <section class="wiki-import-settings">
+          <div><span>IMPORTAR TARJETAS</span><p>Subí un archivo JSON para revisar y agregar muchas fichas de una vez.</p></div>
+          <input type="file" accept="application/json,.json" data-wiki-import-file hidden />
+          <div class="wiki-import-settings-actions"><button class="button" type="button" data-action="open-wiki-import">Importar tarjetas</button><button class="button ghost" type="button" data-action="copy-wiki-import-prompt">Copiar prompt para IA</button></div>
+        </section>
         <button class="button primary" type="submit"><span class="icon">S</span>Guardar cambios</button>
       </form>`
     : `<div class="wiki-panel-empty compact"><span>⚙</span><h2>Solo lectura</h2><p>Solo owner o editor pueden cambiar los ajustes de esta campana.</p></div>`;
@@ -3136,7 +3142,25 @@ function renderModal() {
   if (editing.type === "new-map") return renderNewMapModal();
   if (editing.type === "map-point") return renderMapPointModal();
   if (editing.type === "map-card-preview") return renderMapCardPreviewModal(editing.cardId);
+  if (editing.type === "wiki-import") return renderWikiImportModal();
   return "";
+}
+
+function wikiImportPrompt() {
+  return `Convertí la siguiente historia de una campaña de rol en tarjetas para una wiki. Respondé ÚNICAMENTE con JSON válido, sin markdown, sin explicación y sin bloques de código.\n\nUsá este formato exacto:\n{\n  "tarjetas": [\n    {\n      "titulo": "Nombre de la tarjeta",\n      "tipo": "personaje",\n      "carpeta": "Personajes",\n      "aliases": ["Nombre alternativo"],\n      "propiedades": [{ "nombre": "Rol u oficio", "valor": "...", "icono": "◆" }],\n      "descripcion": "Resumen claro de la información relevante.",\n      "secciones": [{ "titulo": "Historia", "texto": "Detalles, acontecimientos y secretos." }],\n      "relaciones": ["Nombre de otra tarjeta"],\n      "publica": true,\n      "imagenUrl": ""\n    }\n  ]\n}\n\nTipos permitidos: ${Object.keys(WIKI_CARD_TYPES).join(", ")}. Elegí el tipo más adecuado; si no encaja, usá "nota". Creá una tarjeta por personaje, lugar, facción, objeto, evento o concepto importante. No inventes datos: si algo es incierto, omitilo. Mantené las relaciones con los títulos exactos de las otras tarjetas.\n\nHistoria:\n[PEGÁ ACÁ TU HISTORIA]`;
+}
+
+function renderWikiImportModal() {
+  const pending = pendingWikiImport;
+  if (!pending) return "";
+  const count = pending.cards.length;
+  const sample = pending.cards.slice(0, 4);
+  return `<div class="modal-backdrop"><section class="modal-panel wiki-import-modal"><header class="modal-head"><div><span class="wiki-modal-kicker">IMPORTAR TARJETAS</span><h2>Se detectaron ${count} tarjeta${count === 1 ? "" : "s"}</h2><p class="muted small">¿Querés agregarlas? Todavía no se modificó la wiki: revisá la lista y confirmá cuando estés listo.</p></div><button class="button ghost" data-action="close-wiki-import" aria-label="Cerrar">×</button></header>
+    ${pending.skipped ? `<p class="wiki-import-warning">Se omitieron ${pending.skipped} elemento${pending.skipped === 1 ? "" : "s"} sin título.</p>` : ""}
+    <div class="wiki-import-summary">${sample.map((card) => `<span>${escapeHtml(wikiType(card).icon)} ${escapeHtml(card.title)}</span>`).join("")}${count > sample.length ? `<small>y ${count - sample.length} más</small>` : ""}</div>
+    ${editing.showList ? `<div class="wiki-import-list">${pending.cards.map((card) => `<article><span>${escapeHtml(wikiType(card).icon)}</span><div><strong>${escapeHtml(card.title)}</strong><small>${escapeHtml(wikiType(card).label)} · ${escapeHtml(card.folder)}</small></div></article>`).join("")}</div>` : ""}
+    <footer class="wiki-import-actions"><button class="button" data-action="toggle-wiki-import-list">${editing.showList ? "Ocultar lista" : "Ver lista de tarjetas"}</button><button class="button primary" data-action="confirm-wiki-import">Agregar ${count} tarjeta${count === 1 ? "" : "s"}</button></footer>
+  </section></div>`;
 }
 
 function renderNewMapModal() {
@@ -3895,6 +3919,27 @@ document.addEventListener("click", async (event) => {
   if (action === "map-zoom-out") mapRuntime?.zoomBy(1 / 1.2);
   if (action === "map-reset") mapRuntime?.reset();
 
+  if (action === "open-wiki-import") {
+    document.querySelector("[data-wiki-import-file]")?.click();
+  }
+
+  if (action === "copy-wiki-import-prompt") {
+    copyText(wikiImportPrompt(), "Prompt para IA copiado.");
+  }
+
+  if (action === "toggle-wiki-import-list" && editing?.type === "wiki-import") {
+    editing.showList = !editing.showList;
+    render();
+  }
+
+  if (action === "confirm-wiki-import") confirmWikiImport();
+
+  if (action === "close-wiki-import") {
+    pendingWikiImport = null;
+    editing = null;
+    render();
+  }
+
   if (action === "close-modal") {
     editing = null;
     render();
@@ -4208,6 +4253,13 @@ document.addEventListener("change", (event) => {
   const folderSelect = event.target.closest("[data-wiki-folder-move]");
   if (folderSelect) {
     moveWikiPageToFolder(folderSelect.dataset.id, folderSelect.value);
+    return;
+  }
+
+  const wikiImportInput = event.target.closest("[data-wiki-import-file]");
+  if (wikiImportInput) {
+    readWikiImportFile(wikiImportInput.files?.[0]);
+    wikiImportInput.value = "";
     return;
   }
 
@@ -4587,6 +4639,119 @@ function createCampaign(data) {
   state.campaigns.unshift(campaign);
   activeCampaignId = campaign.id;
   activeTab = "wiki";
+}
+
+function importedWikiType(value) {
+  const requested = normalizeSearchText(value || "");
+  if (WIKI_CARD_TYPES[requested]) return requested;
+  const found = Object.entries(WIKI_CARD_TYPES).find(([key, type]) =>
+    normalizeSearchText(key) === requested || normalizeSearchText(type.label) === requested
+  );
+  return found ? found[0] : "nota";
+}
+
+function importedWikiProperties(source) {
+  const raw = source.propertyItems ?? source.propiedades ?? source.properties ?? {};
+  const entries = Array.isArray(raw)
+    ? raw.map((item) => [item?.label ?? item?.nombre ?? item?.name, item?.value ?? item?.valor ?? item?.text, item?.icon ?? item?.icono])
+    : Object.entries(raw && typeof raw === "object" ? raw : {}).map(([label, value]) => [label, value, "◇"]);
+  return entries
+    .map(([label, value, icon]) => ({
+      id: uid("property"),
+      icon: String(icon || "◇"),
+      label: String(label || "").trim(),
+      value: String(value ?? "").trim(),
+    }))
+    .filter((item) => item.label);
+}
+
+function importedWikiBlocks(source, description) {
+  const raw = source.contentBlocks ?? source.secciones ?? source.blocks ?? [];
+  const blocks = (Array.isArray(raw) ? raw : []).map((block) => {
+    const type = WIKI_CONTENT_TYPES[block?.type] ? block.type : "text";
+    return {
+      id: uid("block"),
+      type,
+      title: String(block?.title ?? block?.titulo ?? WIKI_CONTENT_TYPES[type].title).trim() || WIKI_CONTENT_TYPES[type].title,
+      text: String(block?.text ?? block?.texto ?? block?.content ?? block?.contenido ?? "").trim(),
+      url: String(block?.url ?? block?.imagenUrl ?? "").trim(),
+    };
+  }).filter((block) => block.text || block.url);
+  if (!blocks.length && description) blocks.push({ id: uid("block"), type: "text", title: "Descripción", text: description, url: "" });
+  return blocks;
+}
+
+function prepareWikiImport(payload) {
+  const list = Array.isArray(payload)
+    ? payload
+    : payload?.tarjetas ?? payload?.cards ?? payload?.wiki ?? payload?.fichas;
+  if (!Array.isArray(list)) throw new Error('El JSON debe contener un arreglo "tarjetas".');
+  if (list.length > 500) throw new Error("El archivo puede contener hasta 500 tarjetas por importación.");
+  let skipped = 0;
+  const cards = list.flatMap((source) => {
+    if (!source || typeof source !== "object") { skipped += 1; return []; }
+    const title = String(source.title ?? source.titulo ?? source.nombre ?? source.name ?? "").trim();
+    if (!title) { skipped += 1; return []; }
+    const type = importedWikiType(source.type ?? source.tipo ?? source.category ?? source.categoria);
+    const description = String(source.description ?? source.descripcion ?? source.content ?? source.contenido ?? "").trim();
+    const aliases = [title, ...(Array.isArray(source.aliases) ? source.aliases : splitTags(source.aliases ?? source.alias ?? ""))]
+      .map((value) => String(value || "").trim())
+      .filter((value, index, values) => value && values.findIndex((other) => normalizeSearchText(other) === normalizeSearchText(value)) === index);
+    const propertyItems = importedWikiProperties(source);
+    const relations = Array.isArray(source.relations ?? source.relaciones)
+      ? (source.relations ?? source.relaciones)
+      : splitTags(source.relations ?? source.relaciones ?? "");
+    const isPublic = source.isPublic ?? source.publica ?? source.public ?? true;
+    const now = Date.now();
+    return [{
+      id: uid("wiki"), title, type, category: WIKI_CARD_TYPES[type].label,
+      aliases, folder: String(source.folder ?? source.carpeta ?? WIKI_CARD_TYPES[type].label).trim() || WIKI_CARD_TYPES[type].label,
+      properties: Object.fromEntries(propertyItems.filter((item) => item.value).map((item) => [item.label, item.value])),
+      propertyItems, contentBlocks: importedWikiBlocks(source, description), description, content: description,
+      imageUrl: String(source.imageUrl ?? source.imagenUrl ?? source.imagen ?? "").trim(),
+      relationNames: relations.map((value) => String(value || "").trim()).filter(Boolean), relations: [],
+      isPublic: !(isPublic === false || String(isPublic).toLowerCase() === "false"), createdAt: now, modifiedAt: now,
+    }];
+  });
+  if (!cards.length) throw new Error("No encontramos tarjetas con un título válido.");
+  return { cards, skipped };
+}
+
+async function readWikiImportFile(file) {
+  if (!(file instanceof File) || !file.size) return;
+  if (file.size > 2 * 1024 * 1024) { showToast("El JSON debe pesar menos de 2 MB."); return; }
+  try {
+    pendingWikiImport = prepareWikiImport(JSON.parse(await file.text()));
+    editing = { type: "wiki-import", showList: false };
+    render();
+  } catch (error) {
+    pendingWikiImport = null;
+    showToast(error instanceof Error ? error.message : "No se pudo leer el archivo JSON.");
+  }
+}
+
+function confirmWikiImport() {
+  const campaign = campaignById(activeCampaignId);
+  if (!campaign || !pendingWikiImport || !canManageCampaign(campaign, currentUser().id)) return;
+  const imported = pendingWikiImport.cards;
+  const allCards = [...wikiCardsFor(campaign), ...imported];
+  const lookup = new Map();
+  allCards.forEach((card) => [card.title, ...(card.aliases || [])].forEach((name) => {
+    const key = normalizeSearchText(name);
+    if (key && !lookup.has(key)) lookup.set(key, card.id);
+  }));
+  imported.forEach((card) => {
+    card.relations = [...new Set(card.relationNames.map((name) => lookup.get(normalizeSearchText(name))).filter((id) => id && id !== card.id))];
+    delete card.relationNames;
+  });
+  campaign.wiki = [...imported, ...(campaign.wiki || [])];
+  campaign.wikiFolders = [...new Set([...(campaign.wikiFolders || []), ...imported.map((card) => card.folder)])];
+  selectedWikiCardId = imported[0]?.id || selectedWikiCardId;
+  pendingWikiImport = null;
+  editing = null;
+  saveState();
+  render();
+  showToast(`Se agregaron ${imported.length} tarjeta${imported.length === 1 ? "" : "s"}.`);
 }
 
 async function saveWikiPage(data) {
