@@ -1213,7 +1213,7 @@ function normalizedWikiContentBlocks(page) {
 }
 
 function wikiCardsFor(campaign) {
-  return (campaign?.wiki || []).map((page) => ({
+  const cards = (campaign?.wiki || []).map((page) => ({
     ...page,
     title: page.title || "Sin título",
     type: page.type || wikiTypeFromLegacyCategory(page.category),
@@ -1227,6 +1227,24 @@ function wikiCardsFor(campaign) {
     modifiedAt: page.modifiedAt || page.createdAt || Date.now(),
     createdAt: page.createdAt || page.modifiedAt || Date.now(),
   }));
+  const seen = new Set();
+  return cards.filter((card) => {
+    // Importaciones repetidas pueden generar IDs distintos para la misma ficha.
+    // Conservamos fichas homónimas si su contenido es diferente.
+    const key = [
+      normalizeSearchText(card.title),
+      normalizeSearchText(card.folder),
+      card.type,
+      JSON.stringify(card.aliases || []),
+      String(card.description || ""),
+      String(card.imageUrl || ""),
+      JSON.stringify(card.properties || {}),
+      JSON.stringify(card.contentBlocks || []),
+    ].join("\u001f");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function wikiTypeFromLegacyCategory(category) {
