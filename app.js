@@ -42,6 +42,26 @@ const PRESET_CAMPAIGN_TAGS = [
   "Roleo pesado",
 ];
 
+const CAMPAIGN_BACKGROUND_THEMES = {
+  map: "Mapa antiguo",
+  atlas: "Atlas vivo",
+  archive: "Sala de archivos",
+  table: "Mesa de juego",
+  sky: "Cielo de fantasía",
+  tapestry: "Tapiz y heráldica",
+  biomes: "Mundo por biomas",
+  custom: "Imagen de la campaña",
+};
+
+const WIKI_GRAPH_BACKGROUND_THEMES = {
+  nebula: "Nebulosa arcana",
+  constellations: "Constelaciones",
+  void: "Vacío oscuro",
+  parchment: "Pergamino astral",
+  tactical: "Cuadrícula táctica",
+  none: "Sin ambientación",
+};
+
 const WIKI_CARD_TYPES = {
   personaje: {
     label: "Personaje",
@@ -422,6 +442,56 @@ function splitTags(value) {
 function campaignTags(campaign) {
   if (Array.isArray(campaign?.tags)) return campaign.tags.filter(Boolean);
   return splitTags(campaign?.tone);
+}
+
+function campaignAppearance(campaign) {
+  const saved = campaign?.appearance && typeof campaign.appearance === "object" ? campaign.appearance : {};
+  const pageTheme = Object.hasOwn(CAMPAIGN_BACKGROUND_THEMES, saved.pageTheme) ? saved.pageTheme : "map";
+  const graphTheme = Object.hasOwn(WIKI_GRAPH_BACKGROUND_THEMES, saved.graphTheme) ? saved.graphTheme : "nebula";
+  const accent = /^#[0-9a-f]{6}$/i.test(String(saved.accent || "")) ? saved.accent : "#68c3b2";
+  return {
+    pageTheme,
+    graphTheme,
+    accent,
+    intensity: Math.max(20, Math.min(100, Number(saved.intensity) || 68)),
+    darkness: Math.max(30, Math.min(95, Number(saved.darkness) || 72)),
+    animated: saved.animated !== false,
+    reducedMotion: Boolean(saved.reducedMotion),
+  };
+}
+
+function renderThemeOptions(themes, selected) {
+  return Object.entries(themes)
+    .map(([value, label]) => `<option value="${escapeAttr(value)}" ${selected === value ? "selected" : ""}>${escapeHtml(label)}</option>`)
+    .join("");
+}
+
+function campaignAppearanceStyle(campaign, appearance) {
+  const customImage = campaign.imageUrl
+    ? `--campaign-background-image:url(&quot;${escapeAttr(campaign.imageUrl)}&quot;);`
+    : "--campaign-background-image:none;";
+  return `--ambient-accent:${appearance.accent};--ambient-intensity:${appearance.intensity / 100};--ambient-darkness:${appearance.darkness / 100};${customImage}`;
+}
+
+function previewCampaignAppearance(form) {
+  const shell = document.querySelector(".wiki-app-shell");
+  if (!form || !shell) return;
+  const pageTheme = form.elements.pageBackgroundTheme?.value || "map";
+  const graphTheme = form.elements.graphBackgroundTheme?.value || "nebula";
+  shell.classList.remove(...Object.keys(CAMPAIGN_BACKGROUND_THEMES).map((key) => `ambient-${key}`));
+  shell.classList.remove(...Object.keys(WIKI_GRAPH_BACKGROUND_THEMES).map((key) => `graph-${key}`));
+  shell.classList.add(`ambient-${pageTheme}`, `graph-${graphTheme}`);
+  shell.classList.toggle("ambient-motion", Boolean(form.elements.appearanceAnimated?.checked && !form.elements.appearanceReducedMotion?.checked));
+  shell.style.setProperty("--ambient-accent", form.elements.appearanceAccent?.value || "#68c3b2");
+  shell.style.setProperty("--ambient-intensity", String((Number(form.elements.appearanceIntensity?.value) || 68) / 100));
+  shell.style.setProperty("--ambient-darkness", String((Number(form.elements.appearanceDarkness?.value) || 72) / 100));
+  const rangeLabels = form.querySelectorAll('.wiki-appearance-controls input[type="range"]');
+  rangeLabels.forEach((input) => {
+    const output = input.closest(".field")?.querySelector("span small");
+    if (output) output.textContent = `${input.value}%`;
+  });
+  const colorDot = form.querySelector(".wiki-appearance-color-dot");
+  if (colorDot) colorDot.style.background = form.elements.appearanceAccent?.value || "#68c3b2";
 }
 
 function formatTags(tags) {
@@ -1110,6 +1180,7 @@ function renderCampaign() {
 
 function renderWikiWorkspace(campaign, role, canManage) {
   const cards = wikiCardsFor(campaign);
+  const appearance = campaignAppearance(campaign);
   const isWikiHome = activeTab === "wiki" && wikiView === "home";
   const isWikiCards = activeTab === "wiki" && wikiView === "cards";
   let content = "";
@@ -1120,7 +1191,7 @@ function renderWikiWorkspace(campaign, role, canManage) {
   else content = wikiView === "cards" ? renderWikiLibrary(campaign, canManage) : renderWikiHome(campaign, canManage);
 
   return `
-    <main class="wiki-app-shell">
+    <main class="wiki-app-shell ambient-${appearance.pageTheme} graph-${appearance.graphTheme} ${appearance.animated && !appearance.reducedMotion ? "ambient-motion" : ""}" style="${campaignAppearanceStyle(campaign, appearance)}">
       <header class="wiki-commandbar">
         <button class="wiki-world-switch" data-action="go-dashboard" title="Volver al tablero">
           <span class="wiki-world-mark">${escapeHtml(campaign.title.slice(0, 1).toUpperCase())}</span>
@@ -3055,6 +3126,7 @@ function renderMapPointPicker(campaign, picker) {
 }
 
 function renderWikiSettingsPage(campaign, role, canManage) {
+  const appearance = campaignAppearance(campaign);
   const form = canManage
     ? `<form class="wiki-settings-form" data-form="settings">
         <div class="wiki-form-pair">
@@ -3104,6 +3176,26 @@ function renderWikiSettingsPage(campaign, role, canManage) {
           <label class="check-field"><input name="playersCanDrawMaps" type="checkbox" ${mapSettings(campaign).playersCanDraw ? "checked" : ""} /><span>Permitir que los jugadores dibujen trazos temporales</span></label>
           <label class="field"><span>Duración de los trazos (segundos)</span><input class="input" name="mapStrokeDuration" type="number" min="10" max="3600" value="${mapSettings(campaign).strokeDuration}" /></label>
         </div>
+        <section class="wiki-appearance-settings">
+          <div class="wiki-appearance-heading">
+            <div><span>ATMÓSFERA DE LA CAMPAÑA</span><p>Elegí fondos independientes para la aplicación y el mapa de relaciones.</p></div>
+            <span class="wiki-appearance-color-dot" style="background:${appearance.accent}"></span>
+          </div>
+          <div class="wiki-form-pair">
+            <label class="field"><span>Fondo general</span><select class="select" name="pageBackgroundTheme">${renderThemeOptions(CAMPAIGN_BACKGROUND_THEMES, appearance.pageTheme)}</select></label>
+            <label class="field"><span>Fondo del mapa de nodos</span><select class="select" name="graphBackgroundTheme">${renderThemeOptions(WIKI_GRAPH_BACKGROUND_THEMES, appearance.graphTheme)}</select></label>
+          </div>
+          <div class="wiki-appearance-controls">
+            <label class="field"><span>Intensidad <small>${appearance.intensity}%</small></span><input name="appearanceIntensity" type="range" min="20" max="100" value="${appearance.intensity}" /></label>
+            <label class="field"><span>Oscuridad <small>${appearance.darkness}%</small></span><input name="appearanceDarkness" type="range" min="30" max="95" value="${appearance.darkness}" /></label>
+            <label class="field wiki-color-field"><span>Color ambiental</span><input name="appearanceAccent" type="color" value="${appearance.accent}" /></label>
+          </div>
+          <div class="wiki-appearance-toggles">
+            <label class="check-field"><input name="appearanceAnimated" type="checkbox" ${appearance.animated ? "checked" : ""} /><span>Animaciones ambientales suaves</span></label>
+            <label class="check-field"><input name="appearanceReducedMotion" type="checkbox" ${appearance.reducedMotion ? "checked" : ""} /><span>Reducir movimiento en esta campaña</span></label>
+          </div>
+          <p class="wiki-appearance-note">“Imagen de la campaña” utiliza la imagen del tablero configurada arriba.</p>
+        </section>
         <section class="wiki-import-settings">
           <div><span>IMPORTAR TARJETAS</span><p>Subí un archivo JSON para revisar y agregar muchas fichas de una vez.</p></div>
           <input type="file" accept="application/json,.json" data-wiki-import-file hidden />
@@ -4756,6 +4848,9 @@ function refreshStatBlock5e(editor) {
 }
 
 document.addEventListener("change", (event) => {
+  const appearanceForm = event.target.closest(".wiki-settings-form");
+  if (appearanceForm && event.target.matches('[name^="appearance"], [name$="BackgroundTheme"]')) previewCampaignAppearance(appearanceForm);
+
   const playerCharacterToggle = event.target.closest('.wiki-card-form input[name="isPlayerCharacter"]');
   if (playerCharacterToggle) {
     playerCharacterToggle.closest("[data-player-assignment]")?.querySelector("[data-player-owner]")?.classList.toggle("hidden", !playerCharacterToggle.checked);
@@ -4814,6 +4909,9 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("input", (event) => {
+  const appearanceForm = event.target.closest(".wiki-settings-form");
+  if (appearanceForm && event.target.matches('[name^="appearance"]')) previewCampaignAppearance(appearanceForm);
+
   const sheetEditor = event.target.closest("[data-5e-sheet-editor]");
   if (sheetEditor) refreshCharacterSheet5e(sheetEditor);
   const statEditor = event.target.closest("[data-5e-stat-editor]");
@@ -5532,6 +5630,15 @@ function saveSettings(data) {
     mapSettings: {
       playersCanDraw: Boolean(data.playersCanDrawMaps),
       strokeDuration: Math.max(10, Math.min(3600, Number(data.mapStrokeDuration) || 90)),
+    },
+    appearance: {
+      pageTheme: Object.hasOwn(CAMPAIGN_BACKGROUND_THEMES, data.pageBackgroundTheme) ? data.pageBackgroundTheme : "map",
+      graphTheme: Object.hasOwn(WIKI_GRAPH_BACKGROUND_THEMES, data.graphBackgroundTheme) ? data.graphBackgroundTheme : "nebula",
+      accent: /^#[0-9a-f]{6}$/i.test(String(data.appearanceAccent || "")) ? data.appearanceAccent : "#68c3b2",
+      intensity: Math.max(20, Math.min(100, Number(data.appearanceIntensity) || 68)),
+      darkness: Math.max(30, Math.min(95, Number(data.appearanceDarkness) || 72)),
+      animated: Boolean(data.appearanceAnimated),
+      reducedMotion: Boolean(data.appearanceReducedMotion),
     },
   });
 }

@@ -1224,10 +1224,126 @@ p {
 
 /* Connected campaign wiki */
 .wiki-app-shell {
+  position: relative;
+  isolation: isolate;
   min-height: 100vh;
   background:
     radial-gradient(circle at 16% 100%, rgba(14, 78, 91, 0.32), transparent 34rem),
     linear-gradient(180deg, #080a0c, #070a0b 62%, #071014);
+}
+
+.wiki-app-shell::before,
+.wiki-app-shell::after {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  content: "";
+  pointer-events: none;
+}
+
+.wiki-app-shell::before {
+  opacity: var(--ambient-intensity, 0.68);
+}
+
+.wiki-app-shell::after {
+  background: rgba(3, 5, 7, var(--ambient-darkness, 0.72));
+}
+
+.wiki-app-shell > * {
+  position: relative;
+  z-index: 1;
+}
+
+.wiki-app-shell > .wiki-commandbar {
+  position: sticky;
+  z-index: 16;
+}
+
+.ambient-map::before {
+  background:
+    radial-gradient(ellipse at 18% 30%, transparent 0 14%, color-mix(in srgb, var(--ambient-accent) 26%, transparent) 14.3%, transparent 14.8%),
+    radial-gradient(ellipse at 76% 62%, transparent 0 18%, rgba(213, 179, 107, 0.2) 18.3%, transparent 18.8%),
+    repeating-radial-gradient(ellipse at 42% 46%, transparent 0 34px, rgba(205, 178, 117, 0.09) 35px, transparent 37px),
+    radial-gradient(circle at 30% 70%, rgba(68, 112, 91, 0.22), transparent 24%),
+    linear-gradient(118deg, #2b251b, #151914 48%, #1b1712);
+}
+
+.ambient-atlas::before {
+  background:
+    radial-gradient(circle at 15% 78%, color-mix(in srgb, var(--ambient-accent) 38%, transparent), transparent 22%),
+    radial-gradient(circle at 83% 24%, rgba(218, 165, 71, 0.28), transparent 18%),
+    repeating-linear-gradient(24deg, transparent 0 74px, rgba(126, 214, 194, 0.1) 75px, transparent 77px),
+    repeating-linear-gradient(116deg, transparent 0 132px, rgba(240, 192, 91, 0.08) 133px, transparent 135px),
+    #071215;
+  background-size: 120% 120%, 120% 120%, 280px 280px, 360px 360px, auto;
+}
+
+.ambient-archive::before {
+  background:
+    radial-gradient(circle at 50% 12%, rgba(224, 177, 88, 0.24), transparent 28%),
+    repeating-linear-gradient(90deg, rgba(91, 61, 34, 0.28) 0 3px, transparent 3px 94px),
+    repeating-linear-gradient(0deg, rgba(214, 173, 99, 0.1) 0 2px, transparent 2px 122px),
+    linear-gradient(90deg, #100d0b, #20170f 48%, #0c0c0b);
+}
+
+.ambient-table::before {
+  background:
+    radial-gradient(circle at 82% 16%, rgba(255, 191, 72, 0.26), transparent 18%),
+    radial-gradient(circle at 24% 68%, color-mix(in srgb, var(--ambient-accent) 24%, transparent), transparent 25%),
+    repeating-linear-gradient(92deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 52px),
+    repeating-linear-gradient(3deg, #21140c 0 7px, #2d1b10 8px 16px, #1b110b 17px 25px);
+}
+
+.ambient-sky::before {
+  background:
+    radial-gradient(circle at 78% 16%, rgba(247, 229, 181, 0.72) 0 1.2%, rgba(183, 208, 222, 0.2) 1.5%, transparent 7%),
+    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.72) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 62% 48%, rgba(255, 255, 255, 0.58) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 42% 80%, color-mix(in srgb, var(--ambient-accent) 42%, transparent), transparent 28%),
+    linear-gradient(155deg, #060713, #11142b 52%, #08171c);
+  background-size: auto, 83px 83px, 127px 127px, auto, auto;
+}
+
+.ambient-tapestry::before {
+  background:
+    radial-gradient(circle at center, color-mix(in srgb, var(--ambient-accent) 22%, transparent), transparent 38%),
+    repeating-conic-gradient(from 45deg, rgba(211, 172, 93, 0.13) 0 10deg, transparent 10deg 45deg),
+    repeating-linear-gradient(45deg, transparent 0 38px, rgba(255, 255, 255, 0.035) 39px 40px),
+    linear-gradient(135deg, #251317, #11151a 55%, #21170e);
+  background-size: auto, 116px 116px, 80px 80px, auto;
+}
+
+.ambient-biomes::before {
+  background:
+    radial-gradient(ellipse at 14% 28%, rgba(57, 127, 73, 0.42), transparent 31%),
+    radial-gradient(ellipse at 78% 18%, rgba(219, 176, 84, 0.32), transparent 27%),
+    radial-gradient(ellipse at 82% 78%, rgba(95, 145, 178, 0.38), transparent 30%),
+    radial-gradient(ellipse at 34% 88%, rgba(184, 211, 218, 0.26), transparent 24%),
+    radial-gradient(circle at 52% 44%, color-mix(in srgb, var(--ambient-accent) 25%, transparent), transparent 30%),
+    #0b100e;
+}
+
+.ambient-custom::before {
+  background-image: var(--campaign-background-image);
+  background-position: center;
+  background-size: cover;
+  filter: saturate(0.82) contrast(1.08);
+}
+
+.ambient-motion.ambient-atlas::before {
+  animation: ambient-atlas-drift 34s ease-in-out infinite alternate;
+}
+
+.ambient-motion.ambient-sky::before {
+  animation: ambient-sky-drift 48s linear infinite alternate;
+}
+
+@keyframes ambient-atlas-drift {
+  to { background-position: 8% 4%, -6% 8%, 42px 26px, -34px 54px, 0 0; }
+}
+
+@keyframes ambient-sky-drift {
+  to { background-position: 0 0, 34px 18px, -42px 22px, 8% -4%, 0 0; }
 }
 
 .wiki-commandbar {
@@ -1550,6 +1666,108 @@ p {
   user-select: none;
   cursor: grab;
   isolation: isolate;
+}
+
+.wiki-graph::before {
+  position: absolute;
+  inset: -12%;
+  z-index: 0;
+  content: "";
+  opacity: var(--ambient-intensity, 0.68);
+  pointer-events: none;
+  transform: translateZ(0);
+}
+
+.graph-nebula .wiki-graph {
+  background-color: #06090d;
+  background-image:
+    radial-gradient(circle at 18% 24%, rgba(255, 255, 255, 0.32) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 72% 62%, rgba(255, 255, 255, 0.22) 0 1px, transparent 1.4px),
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 91px 91px, 137px 137px, 30px 30px, 30px 30px;
+}
+
+.graph-nebula .wiki-graph::before {
+  background:
+    radial-gradient(ellipse at 28% 62%, color-mix(in srgb, var(--ambient-accent) 56%, transparent), transparent 34%),
+    radial-gradient(ellipse at 72% 34%, rgba(111, 72, 182, 0.42), transparent 31%),
+    radial-gradient(ellipse at 54% 76%, rgba(223, 160, 67, 0.22), transparent 28%),
+    conic-gradient(from 118deg at 48% 51%, transparent, rgba(75, 147, 159, 0.14), transparent 38%);
+  filter: blur(20px) saturate(1.25);
+}
+
+.graph-constellations .wiki-graph {
+  background-color: #050811;
+  background-image:
+    radial-gradient(circle, rgba(232, 244, 255, 0.68) 0 1px, transparent 1.6px),
+    radial-gradient(circle, color-mix(in srgb, var(--ambient-accent) 72%, white) 0 1px, transparent 1.8px),
+    repeating-linear-gradient(32deg, transparent 0 86px, rgba(115, 162, 180, 0.1) 87px, transparent 89px);
+  background-size: 74px 74px, 131px 131px, 240px 240px;
+  background-position: 8px 14px, 46px 23px, 0 0;
+}
+
+.graph-constellations .wiki-graph::before {
+  background: radial-gradient(circle at center, color-mix(in srgb, var(--ambient-accent) 18%, transparent), transparent 58%);
+}
+
+.graph-void .wiki-graph {
+  background: radial-gradient(circle at center, #0b1014, #030405 72%);
+}
+
+.graph-void .wiki-graph::before,
+.graph-none .wiki-graph::before {
+  display: none;
+}
+
+.graph-parchment .wiki-graph {
+  border-color: rgba(197, 156, 86, 0.28);
+  background:
+    repeating-radial-gradient(ellipse at 30% 40%, transparent 0 42px, rgba(88, 59, 30, 0.12) 43px, transparent 45px),
+    repeating-linear-gradient(8deg, rgba(255, 255, 255, 0.018) 0 2px, transparent 2px 13px),
+    #21190f;
+}
+
+.graph-parchment .wiki-graph::before {
+  background: radial-gradient(ellipse at center, rgba(185, 131, 57, 0.18), transparent 64%);
+}
+
+.graph-tactical .wiki-graph {
+  background-color: #07100f;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--ambient-accent) 22%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--ambient-accent) 22%, transparent) 1px, transparent 1px),
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 130px 130px, 130px 130px, 26px 26px, 26px 26px;
+}
+
+.graph-tactical .wiki-graph::before {
+  background: radial-gradient(circle at center, color-mix(in srgb, var(--ambient-accent) 17%, transparent), transparent 60%);
+}
+
+.graph-none .wiki-graph {
+  background: #080b0d;
+}
+
+.ambient-motion.graph-nebula .wiki-graph::before {
+  animation: wiki-nebula-breathe 18s ease-in-out infinite alternate;
+}
+
+.graph-nebula .wiki-node.player-node {
+  box-shadow: 0 0 0 3px rgba(244, 217, 137, 0.14), 0 0 42px color-mix(in srgb, var(--ambient-accent) 36%, transparent), 0 11px 28px rgba(0, 0, 0, 0.48);
+}
+
+@keyframes wiki-nebula-breathe {
+  0% { transform: translate3d(-1.5%, 1%, 0) scale(1); opacity: var(--ambient-intensity, 0.68); }
+  100% { transform: translate3d(2%, -1.5%, 0) scale(1.08); opacity: var(--ambient-intensity, 0.68); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wiki-app-shell::before,
+  .wiki-graph::before {
+    animation: none !important;
+  }
 }
 
 .wiki-graph.compact {
@@ -3890,7 +4108,7 @@ body.wiki-graph-expanded {
   min-height: calc(100vh - 64px);
   background:
     radial-gradient(circle at 100% 0%, rgba(48, 107, 101, 0.09), transparent 32rem),
-    #090c0e;
+    rgba(9, 12, 14, 0.82);
 }
 
 .wiki-management-sidebar,
@@ -3997,7 +4215,7 @@ body.wiki-graph-expanded {
 .wiki-management-main {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  background: rgba(7, 10, 11, 0.9);
+  background: rgba(7, 10, 11, 0.82);
 }
 
 .wiki-section-toolbar {
@@ -4259,11 +4477,85 @@ body.wiki-graph-expanded {
   letter-spacing: .1em;
 }
 
+.wiki-appearance-settings {
+  display: grid;
+  gap: 15px;
+  padding: 17px;
+  border: 1px solid color-mix(in srgb, var(--ambient-accent, #68c3b2) 30%, transparent);
+  border-radius: 13px;
+  background:
+    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--ambient-accent, #68c3b2) 13%, transparent), transparent 35%),
+    rgba(104, 195, 178, 0.035);
+}
+
+.wiki-appearance-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.wiki-appearance-heading > div > span {
+  color: color-mix(in srgb, var(--ambient-accent, #68c3b2) 72%, white);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.wiki-appearance-heading p,
+.wiki-appearance-note {
+  margin: 5px 0 0;
+  color: #879290;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.wiki-appearance-color-dot {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  border: 3px solid rgba(255, 255, 255, 0.68);
+  border-radius: 50%;
+  box-shadow: 0 0 18px currentColor;
+}
+
+.wiki-appearance-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 92px;
+  gap: 12px;
+  align-items: end;
+}
+
+.wiki-appearance-controls input[type="range"] {
+  width: 100%;
+  accent-color: var(--ambient-accent, #68c3b2);
+}
+
+.wiki-color-field input {
+  width: 100%;
+  min-height: 42px;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: #0b0f10;
+}
+
+.wiki-appearance-toggles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px 18px;
+}
+
+.wiki-appearance-note {
+  margin: 0;
+}
+
 .maps-workspace {
   display: grid;
   min-height: calc(100vh - 80px);
   grid-template-columns: 285px minmax(0, 1fr);
-  background: #070a0b;
+  background: rgba(7, 10, 11, 0.86);
 }
 
 .maps-browser {
@@ -5515,5 +5807,11 @@ body.wiki-graph-expanded {
 
   .public-page-body {
     grid-row: 2;
+  }
+}
+@media (max-width: 760px) {
+  .wiki-appearance-controls,
+  .wiki-appearance-toggles {
+    grid-template-columns: 1fr;
   }
 }
