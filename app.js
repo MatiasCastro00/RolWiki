@@ -727,9 +727,43 @@ function campaignById(id) {
   return state.campaigns.find((campaign) => campaign.id === id) || null;
 }
 
+function routeSlug(value) {
+  return normalizeSearchText(value)
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "sin-nombre";
+}
+
+function routeItemId(value) {
+  return decodeURIComponent(String(value || "")).split("--").pop();
+}
+
+function campaignRoute(campaign = campaignById(activeCampaignId)) {
+  if (!campaign) return "";
+  const section = activeTab === "wiki"
+    ? (wikiView === "cards" ? "tarjetas" : "inicio")
+    : ({ maps: "mapas", characters: "personajes", members: "jugadores", settings: "ajustes" }[activeTab] || "inicio");
+  let route = `${routeSlug(campaign.title)}--${campaign.id}/${section}`;
+
+  if (section === "tarjetas" && selectedWikiCardId) {
+    const card = wikiCardsFor(campaign).find((item) => item.id === selectedWikiCardId);
+    if (card) route += `/${routeSlug(card.title)}--${card.id}`;
+  }
+
+  return route;
+}
+
+function setCampaignRoute() {
+  const route = campaignRoute();
+  if (route) setHash(`/${route}`);
+}
+
 function getRoute() {
   const hash = window.location.hash.replace(/^#/, "");
   if (!hash) return { view: "app" };
+  if (hash.startsWith("/")) {
+    const [campaignSlug, section = "inicio", item = ""] = hash.slice(1).split("/").map(decodeURIComponent);
+    return { view: "campaign-path", campaignSlug, section, item };
+  }
   const params = new URLSearchParams(hash);
   if (params.has("wiki")) return { view: "wiki", id: params.get("wiki") };
   if (params.has("invite")) return { view: "invite", token: params.get("invite") };
@@ -765,6 +799,34 @@ function render() {
     const campaign = campaignById(route.id);
     if (campaign && isCampaignMember(campaign, currentUser().id)) {
       activeCampaignId = route.id;
+      renderShell(renderCampaign(), { hideTopbar: true });
+      return;
+    }
+
+    window.location.hash = "";
+  }
+
+  if (route.view === "campaign-path") {
+    const campaign = state.campaigns.find((item) => item.id === routeItemId(route.campaignSlug))
+      || state.campaigns.find((item) => routeSlug(item.title) === route.campaignSlug);
+    if (campaign && isCampaignMember(campaign, currentUser().id)) {
+      activeCampaignId = campaign.id;
+      const sections = {
+        inicio: "wiki", tarjetas: "wiki", mapas: "maps", personajes: "characters", jugadores: "members", ajustes: "settings",
+        // Rutas internas anteriores: se conservan para que los enlaces no se rompan.
+        maps: "maps", characters: "characters", members: "members", settings: "settings",
+      };
+      const section = Object.hasOwn(sections, route.section) ? route.section : "inicio";
+      activeTab = sections[section];
+      wikiView = section === "tarjetas" ? "cards" : "home";
+      selectedWikiCardId = null;
+      if (section === "tarjetas" && route.item) {
+        const card = wikiCardsFor(campaign).find((item) => item.id === routeItemId(route.item));
+        if (card) {
+          selectedWikiCardId = card.id;
+          revealWikiFolder(card.folder);
+        }
+      }
       renderShell(renderCampaign(), { hideTopbar: true });
       return;
     }
@@ -3809,7 +3871,7 @@ document.addEventListener("submit", async (event) => {
     createCampaign(data);
     editing = null;
     saveState();
-    setHash(`campaign=${activeCampaignId}`);
+    setCampaignRoute();
     render();
     showToast("Campana creada.");
     return;
@@ -3836,6 +3898,7 @@ document.addEventListener("submit", async (event) => {
     editing = null;
     wikiView = "cards";
     saveState();
+    setCampaignRoute();
     render();
     showToast("Ficha guardada.");
     return;
@@ -3962,13 +4025,13 @@ document.addEventListener("click", async (event) => {
     selectedWikiCardId = null;
     wikiSearch = "";
     wikiFolder = "all";
-    setHash(`campaign=${id}`);
+    setCampaignRoute();
   }
 
   if (action === "set-tab") {
     activeTab = target.dataset.tab;
     if (activeTab === "maps") mapDrawMode = false;
-    render();
+    setCampaignRoute();
   }
 
   if (action === "new-map") {
@@ -3984,7 +4047,7 @@ document.addEventListener("click", async (event) => {
     selectedMapPointId = null;
     mapPointPicker = null;
     mapElementsHidden = false;
-    render();
+    setCampaignRoute();
   }
 
   if (action === "toggle-map-draw") {
@@ -4017,7 +4080,7 @@ document.addEventListener("click", async (event) => {
     activeTab = "maps";
     mapDrawMode = false;
     editing = null;
-    render();
+    setCampaignRoute();
   }
 
   if (action === "map-zoom-in") mapRuntime?.zoomBy(1.2);
@@ -4206,7 +4269,7 @@ document.addEventListener("click", async (event) => {
   if (action === "set-wiki-view") {
     activeTab = "wiki";
     wikiView = target.dataset.view === "cards" ? "cards" : "home";
-    render();
+    setCampaignRoute();
   }
 
   if (action === "select-wiki-card") {
@@ -4215,14 +4278,14 @@ document.addEventListener("click", async (event) => {
     const card = campaignById(activeCampaignId)?.wiki.find((item) => item.id === id);
     if (card) revealWikiFolder(card.folder);
     wikiView = "cards";
-    render();
+    setCampaignRoute();
   }
 
   if (action === "filter-wiki-folder") {
     activeTab = "wiki";
     wikiFolder = target.dataset.folder || "all";
     selectedWikiCardId = null;
-    render();
+    setCampaignRoute();
   }
 
   if (action === "toggle-wiki-folder") {
@@ -5393,7 +5456,7 @@ function acceptInvite(token) {
   saveState();
   activeCampaignId = found.campaign.id;
   activeTab = "characters";
-  setHash(`campaign=${found.campaign.id}`);
+  setCampaignRoute();
   render();
   showToast("Ya sos parte de la campana.");
 }
