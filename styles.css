@@ -1573,6 +1573,24 @@ p {
 .wiki-graph-lines line {
   stroke: rgba(142, 180, 173, 0.23);
   stroke-width: 0.16;
+  transition: opacity 180ms ease, stroke 180ms ease, stroke-width 180ms ease, filter 180ms ease;
+}
+
+.wiki-graph-lines line.character-connection {
+  stroke: rgba(239, 191, 102, 0.78);
+  stroke-width: 0.26;
+  filter: drop-shadow(0 0 2px rgba(239, 191, 102, 0.42));
+}
+
+.wiki-graph-lines line.is-highlighted {
+  stroke: #b8fff0;
+  stroke-width: 0.42;
+  opacity: 1;
+  filter: drop-shadow(0 0 4px rgba(104, 227, 204, 0.95));
+}
+
+.wiki-graph-lines line.is-dimmed {
+  opacity: 0.08;
 }
 
 .wiki-node {
@@ -1592,6 +1610,7 @@ p {
   cursor: grab;
   touch-action: none;
   white-space: nowrap;
+  transition: opacity 180ms ease, filter 180ms ease, transform 180ms ease, background 180ms ease, color 180ms ease;
 }
 
 .wiki-node-name {
@@ -1608,8 +1627,8 @@ p {
 }
 
 .wiki-node-image {
-  width: 46px;
-  height: 46px;
+  width: 42px;
+  height: 42px;
   border: 1px solid rgba(155, 203, 191, 0.34);
   border-radius: 8px;
   object-fit: cover;
@@ -1618,8 +1637,8 @@ p {
 }
 
 .wiki-node.has-image.featured .wiki-node-image {
-  width: 58px;
-  height: 58px;
+  width: 48px;
+  height: 48px;
 }
 
 .wiki-node.has-image .wiki-node-name {
@@ -1649,13 +1668,13 @@ p {
 
 .wiki-node.player-node {
   z-index: 5;
-  max-width: 190px;
-  gap: 7px;
-  padding: 8px 11px;
+  max-width: 158px;
+  gap: 5px;
+  padding: 5px 8px;
   border: 1px solid rgba(244, 217, 137, 0.8);
   border-radius: 10px;
   color: #fff3c8;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 800;
   background: linear-gradient(135deg, rgba(104, 72, 25, 0.96), rgba(25, 20, 12, 0.96));
   box-shadow: 0 0 0 3px rgba(244, 217, 137, 0.14), 0 11px 28px rgba(0, 0, 0, 0.48);
@@ -1668,13 +1687,31 @@ p {
 
 .wiki-node.player-node .wiki-node-image,
 .wiki-node.has-image.player-node .wiki-node-image {
-  width: 78px;
-  height: 78px;
+  width: 58px;
+  height: 58px;
   border-color: rgba(244, 217, 137, 0.85);
 }
 
 .wiki-node.player-node:hover {
   background: linear-gradient(135deg, #846128, #2a210f);
+  transform: translate(-50%, -50%) scale(1.04);
+}
+
+.wiki-graph.has-node-focus .wiki-node.is-dimmed {
+  opacity: 0.2;
+  filter: grayscale(0.75);
+}
+
+.wiki-graph.has-node-focus .wiki-node.is-connected {
+  z-index: 5;
+  color: #ecfffa;
+  filter: drop-shadow(0 0 5px rgba(104, 227, 204, 0.62));
+}
+
+.wiki-graph.has-node-focus .wiki-node.is-focused {
+  z-index: 7;
+  color: #fff;
+  filter: drop-shadow(0 0 9px rgba(104, 227, 204, 0.95));
   transform: translate(-50%, -50%) scale(1.08);
 }
 

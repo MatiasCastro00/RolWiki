@@ -1375,6 +1375,7 @@ function renderWikiGraph(cards, compact = false) {
     .slice(0, compact ? 18 : 36);
   const positions = wikiGraphPositions(sorted);
   const positionById = new Map(positions.map((position) => [position.id, position]));
+  const cardById = new Map(sorted.map((card) => [card.id, card]));
   const edges = wikiRelations(sorted).filter((edge) => positionById.has(edge.sourceId) && positionById.has(edge.targetId));
   return `
     <div class="wiki-graph ${compact ? "compact" : ""}" data-wiki-graph aria-label="Mapa de relaciones de la wiki">
@@ -1382,7 +1383,13 @@ function renderWikiGraph(cards, compact = false) {
         ${edges.map((edge) => {
           const from = positionById.get(edge.sourceId);
           const to = positionById.get(edge.targetId);
-          return `<line data-source="${escapeAttr(edge.sourceId)}" data-target="${escapeAttr(edge.targetId)}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`;
+          const source = cardById.get(edge.sourceId);
+          const target = cardById.get(edge.targetId);
+          const connectsPlayerAndNpc = Boolean(
+            (source?.isPlayerCharacter && target?.type === "personaje" && !target?.isPlayerCharacter)
+            || (target?.isPlayerCharacter && source?.type === "personaje" && !source?.isPlayerCharacter)
+          );
+          return `<line class="${connectsPlayerAndNpc ? "character-connection" : ""}" data-source="${escapeAttr(edge.sourceId)}" data-target="${escapeAttr(edge.targetId)}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`;
         }).join("")}
       </svg>
       ${sorted.map((card, index) => {
@@ -1394,7 +1401,7 @@ function renderWikiGraph(cards, compact = false) {
         const nodeVisual = hasImage
           ? `<img class="wiki-node-image" src="${escapeAttr(imageUrl)}" alt="" loading="lazy" draggable="false" />`
           : `<span class="wiki-node-icon">${type.icon}</span>`;
-        return `<button class="wiki-node ${hasImage ? "has-image" : ""} ${index < 3 ? "featured" : ""} ${isPlayer ? "player-node" : ""}" style="left:${position.x}%;top:${position.y}%" data-action="select-wiki-card" data-id="${card.id}" data-node-id="${card.id}" data-x="${position.x}" data-y="${position.y}" title="Arrastrar o abrir ${escapeAttr(card.title)}">
+        return `<button class="wiki-node ${hasImage ? "has-image" : ""} ${index < 3 ? "featured" : ""} ${isPlayer ? "player-node" : ""}" style="left:${position.x}%;top:${position.y}%" data-action="focus-wiki-graph-node" data-node-id="${card.id}" data-x="${position.x}" data-y="${position.y}" aria-pressed="false" title="Arrastrar o enfocar ${escapeAttr(card.title)}">
           ${nodeVisual}<span class="wiki-node-name">${escapeHtml(card.title)}</span>
         </button>`;
       }).join("")}
@@ -1595,10 +1602,38 @@ function setupWikiGraph(graph) {
     .map((line) => ({ line, sourceId: line.dataset.source, targetId: line.dataset.target }))
     .filter((edge) => nodes.has(edge.sourceId) && nodes.has(edge.targetId));
 
-  const graphState = { graph, nodes, edges, dragging: null };
+  const graphState = { graph, nodes, edges, dragging: null, focusedNodeId: null };
   graph.addEventListener("pointerdown", (event) => startWikiNodeDrag(event, graphState));
+  graph.addEventListener("click", (event) => focusWikiGraphNode(event, graphState));
   renderWikiGraphFrame(graphState);
   return graphState;
+}
+
+function focusWikiGraphNode(event, graphState) {
+  const nodeElement = event.target.closest(".wiki-node[data-node-id]");
+  if (!nodeElement || !graphState.graph.contains(nodeElement) || Date.now() < wikiGraphClickSuppressedUntil) return;
+
+  const nodeId = nodeElement.dataset.nodeId;
+  graphState.focusedNodeId = graphState.focusedNodeId === nodeId ? null : nodeId;
+  const connectedNodeIds = new Set(graphState.focusedNodeId ? [graphState.focusedNodeId] : []);
+  for (const edge of graphState.edges) {
+    if (edge.sourceId === graphState.focusedNodeId) connectedNodeIds.add(edge.targetId);
+    if (edge.targetId === graphState.focusedNodeId) connectedNodeIds.add(edge.sourceId);
+  }
+
+  graphState.graph.classList.toggle("has-node-focus", Boolean(graphState.focusedNodeId));
+  for (const node of graphState.nodes.values()) {
+    const isFocused = node.id === graphState.focusedNodeId;
+    node.element.classList.toggle("is-focused", isFocused);
+    node.element.classList.toggle("is-connected", !isFocused && connectedNodeIds.has(node.id));
+    node.element.classList.toggle("is-dimmed", Boolean(graphState.focusedNodeId) && !connectedNodeIds.has(node.id));
+    node.element.setAttribute("aria-pressed", String(isFocused));
+  }
+  for (const edge of graphState.edges) {
+    const isConnected = edge.sourceId === graphState.focusedNodeId || edge.targetId === graphState.focusedNodeId;
+    edge.line.classList.toggle("is-highlighted", isConnected);
+    edge.line.classList.toggle("is-dimmed", Boolean(graphState.focusedNodeId) && !isConnected);
+  }
 }
 
 function startWikiNodeDrag(event, graphState) {
