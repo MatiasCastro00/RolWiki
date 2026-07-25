@@ -1548,10 +1548,36 @@ p {
   background-size: 26px 26px;
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.28);
   user-select: none;
+  cursor: grab;
+  isolation: isolate;
 }
 
 .wiki-graph.compact {
   min-height: min(620px, calc(100vh - 136px));
+}
+
+.wiki-graph.is-expanded {
+  position: fixed;
+  inset: 10px;
+  z-index: 40;
+  min-height: 0;
+  border-color: rgba(104, 195, 178, 0.28);
+  box-shadow: 0 35px 120px rgba(0, 0, 0, 0.72);
+}
+
+body.wiki-graph-expanded {
+  overflow: hidden;
+}
+
+.wiki-graph.panning {
+  cursor: grabbing;
+}
+
+.wiki-graph-world {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+  will-change: transform;
 }
 
 .wiki-graph::after {
@@ -1580,6 +1606,12 @@ p {
   stroke: rgba(239, 191, 102, 0.78);
   stroke-width: 0.26;
   filter: drop-shadow(0 0 2px rgba(239, 191, 102, 0.42));
+}
+
+.wiki-graph-lines line.character-connection.is-highlighted {
+  stroke: #ffd477;
+  stroke-width: 0.48;
+  filter: drop-shadow(0 0 5px rgba(255, 191, 68, 1));
 }
 
 .wiki-graph-lines line.is-highlighted {
@@ -1627,8 +1659,8 @@ p {
 }
 
 .wiki-node-image {
-  width: 42px;
-  height: 42px;
+  width: 46px;
+  height: 46px;
   border: 1px solid rgba(155, 203, 191, 0.34);
   border-radius: 8px;
   object-fit: cover;
@@ -1637,8 +1669,8 @@ p {
 }
 
 .wiki-node.has-image.featured .wiki-node-image {
-  width: 48px;
-  height: 48px;
+  width: 46px;
+  height: 46px;
 }
 
 .wiki-node.has-image .wiki-node-name {
@@ -1687,8 +1719,8 @@ p {
 
 .wiki-node.player-node .wiki-node-image,
 .wiki-node.has-image.player-node .wiki-node-image {
-  width: 58px;
-  height: 58px;
+  width: 46px;
+  height: 46px;
   border-color: rgba(244, 217, 137, 0.85);
 }
 
@@ -1713,6 +1745,92 @@ p {
   color: #fff;
   filter: drop-shadow(0 0 9px rgba(104, 227, 204, 0.95));
   transform: translate(-50%, -50%) scale(1.08);
+}
+
+.wiki-node-image,
+.wiki-node-icon,
+.wiki-node-name {
+  position: relative;
+  z-index: 1;
+}
+
+.wiki-node-link-glow {
+  position: absolute;
+  z-index: 2;
+  width: 26px;
+  height: 8px;
+  border-radius: 999px;
+  background: radial-gradient(ellipse, rgba(255, 226, 143, 1) 0%, rgba(245, 177, 53, 0.76) 34%, transparent 74%);
+  box-shadow: 0 0 5px rgba(255, 208, 95, 0.95), 0 0 13px rgba(238, 159, 38, 0.62);
+  transform: translate(-50%, -50%) rotate(var(--connection-angle));
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.wiki-graph-toolbar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.wiki-graph-toolbar button,
+.wiki-graph-focus-actions button {
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid rgba(104, 195, 178, 0.28);
+  border-radius: 8px;
+  color: #dff8f1;
+  background: rgba(8, 14, 15, 0.9);
+  font-size: 11px;
+  backdrop-filter: blur(10px);
+}
+
+.wiki-graph-toolbar button:hover,
+.wiki-graph-focus-actions button:hover {
+  border-color: rgba(244, 217, 137, 0.64);
+  color: #fff3c8;
+  background: rgba(42, 31, 14, 0.94);
+}
+
+.wiki-graph-pan-hint {
+  color: #677572;
+  font-size: 9px;
+  pointer-events: none;
+}
+
+.wiki-graph-focus-actions {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 7px 6px 12px;
+  border: 1px solid rgba(104, 195, 178, 0.3);
+  border-radius: 10px;
+  color: #eafffa;
+  background: rgba(7, 12, 13, 0.93);
+  transform: translateX(-50%);
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(12px);
+}
+
+.wiki-graph-focus-actions strong {
+  max-width: 220px;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wiki-graph-modal-backdrop {
+  background: rgba(0, 0, 0, 0.54);
+  backdrop-filter: blur(3px);
 }
 
 .wiki-player-assignment {
