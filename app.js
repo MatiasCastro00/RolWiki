@@ -378,6 +378,8 @@ let wikiView = "home";
 let selectedWikiCardId = null;
 let wikiSearch = "";
 let wikiFolder = "all";
+let wikiContextMenu = null;
+let draggedWikiCardId = null;
 const expandedWikiFolders = new Set();
 let wikiGraphRuntime = null;
 let wikiGraphClickSuppressedUntil = 0;
@@ -1721,7 +1723,7 @@ function wikiFoldersFor(campaign) {
   for (const value of [...savedFolders, ...cardFolders]) {
     const folder = String(value || "").trim();
     const key = normalizeSearchText(folder);
-    if (folder && key && !uniqueFolders.has(key)) uniqueFolders.set(key, folder);
+    if (folder && key && key !== "sin carpeta" && !uniqueFolders.has(key)) uniqueFolders.set(key, folder);
   }
   // The saved order is intentional: it is the order shown in the navigation.
   return [...uniqueFolders.values()];
@@ -1748,36 +1750,26 @@ function wikiFolderTree(campaign) {
     });
   });
 
-  wikiCardsFor(campaign).forEach((card) => {
-    const folder = String(card.folder || "Sin carpeta").trim() || "Sin carpeta";
-    const parts = folder.split("/").map((part) => part.trim()).filter(Boolean);
-    let parent = root;
-    let path = "";
-    parts.forEach((part) => {
-      path = path ? `${path}/${part}` : part;
-      parent = findOrCreate(path, part, parent);
-    });
-    parent.cards.push(card);
-  });
   return root;
 }
 
 function renderWikiFolderTree(node, depth = 0) {
   return node.folders.map((folder) => {
     const isOpen = !expandedWikiFolders.has(folder.path);
-    const descendants = folder.cards.length + folder.folders.reduce((total, child) => total + countWikiTreeCards(child), 0);
+    const descendants = countWikiCardsInFolder(campaignById(activeCampaignId), folder.path);
     return `<div class="wiki-tree-node" style="--tree-depth:${depth}">
-      <button class="wiki-tree-folder ${wikiFolder === folder.path ? "active" : ""}" data-action="filter-wiki-folder" data-folder="${escapeAttr(folder.path)}">
+      <button class="wiki-tree-folder ${wikiFolder === folder.path ? "active" : ""}" data-action="filter-wiki-folder" data-folder="${escapeAttr(folder.path)}" data-wiki-folder-target="${escapeAttr(folder.path)}">
         <span class="wiki-tree-toggle" data-action="toggle-wiki-folder" data-folder="${escapeAttr(folder.path)}" role="button" tabindex="0" aria-label="${isOpen ? "Cerrar" : "Abrir"} ${escapeAttr(folder.name)}">${isOpen ? "⌄" : "›"}</span>
         <span class="wiki-tree-icon">▱</span><span>${escapeHtml(folder.name)}</span><small>${descendants}</small>
       </button>
-      ${isOpen ? `<div class="wiki-tree-children">${renderWikiFolderTree(folder, depth + 1)}${folder.cards.map((card) => renderWikiTreeCard(card, depth + 1)).join("")}</div>` : ""}
+      ${isOpen ? `<div class="wiki-tree-children">${renderWikiFolderTree(folder, depth + 1)}</div>` : ""}
     </div>`;
-  }).join("") + node.cards.map((card) => renderWikiTreeCard(card, depth)).join("");
+  }).join("");
 }
 
-function countWikiTreeCards(node) {
-  return node.cards.length + node.folders.reduce((total, child) => total + countWikiTreeCards(child), 0);
+function countWikiCardsInFolder(campaign, folder) {
+  const prefix = `${folder}/`;
+  return wikiCardsFor(campaign).filter((card) => card.folder === folder || card.folder.startsWith(prefix)).length;
 }
 
 function renderWikiTreeCard(card, depth) {
@@ -1817,6 +1809,7 @@ function renderWikiLibrary(campaign, canManage) {
 
   return `
     <section class="wiki-library">
+      ${renderWikiContextMenu(canManage)}
       <aside class="wiki-folder-sidebar">
         <label class="wiki-search"><span>⌕</span><input data-wiki-search type="search" value="${escapeAttr(wikiSearch)}" placeholder="Buscar en la wiki" aria-label="Buscar en la wiki" /></label>
         <div class="wiki-tree-title"><span>CARPETAS</span><small>${folders.length}</small></div>
@@ -1824,7 +1817,7 @@ function renderWikiLibrary(campaign, canManage) {
         <div class="wiki-folder-tree">${renderWikiFolderTree(wikiFolderTree(campaign))}</div>
         ${canManage ? `<button class="wiki-new-folder" data-action="new-wiki-folder"><span>＋</span>Nueva carpeta</button>` : ""}
       </aside>
-      <section class="wiki-card-column">
+      <section class="wiki-card-column" data-wiki-root-target>
         <div class="wiki-list-head">
           <div><span>${wikiFolder === "all" ? "TODAS LAS FICHAS" : escapeHtml(wikiFolder).toUpperCase()}</span><small>${cards.length} resultados</small></div>
           ${canManage ? `<button class="button wiki-create-button" data-action="new-wiki-page"><span>＋</span>Nueva ficha</button>` : ""}
@@ -1843,11 +1836,21 @@ function renderWikiLibrary(campaign, canManage) {
 function renderWikiLibraryRow(card, isSelected) {
   const type = wikiType(card);
   const relations = wikiRelations(wikiCardsFor(campaignById(activeCampaignId))).filter((edge) => edge.sourceId === card.id || edge.targetId === card.id).length;
-  return `<button class="wiki-library-row ${isSelected ? "active" : ""}" data-action="select-wiki-card" data-id="${card.id}">
+  return `<button class="wiki-library-row ${isSelected ? "active" : ""}" draggable="true" data-action="select-wiki-card" data-id="${card.id}" data-wiki-card-drag="${card.id}">
     ${renderWikiThumb(card)}
     <span><strong>${escapeHtml(card.title)}</strong><small>${type.icon} ${type.label} · ${relations} relaciones</small></span>
     <span>›</span>
   </button>`;
+}
+
+function renderWikiContextMenu(canManage) {
+  if (!wikiContextMenu || !canManage) return "";
+  const folder = wikiContextMenu.folder || "Sin carpeta";
+  return `<div class="wiki-context-menu" style="left:${wikiContextMenu.x}px;top:${wikiContextMenu.y}px" data-wiki-context-menu="true">
+    <span>EN ${escapeHtml(folder)}</span>
+    <button data-action="context-new-folder" data-folder="${escapeAttr(folder)}">Nueva carpeta</button>
+    <button data-action="context-new-card" data-folder="${escapeAttr(folder)}">Nueva ficha</button>
+  </div>`;
 }
 
 function renderWikiInspector(card, allCards, canManage) {
@@ -3368,6 +3371,7 @@ function renderWikiTypeModal() {
 
 function renderWikiFolderModal() {
   const campaign = campaignById(activeCampaignId);
+  const parent = editing?.parentFolder || "";
   return `
     <div class="modal-backdrop">
       <section class="modal-panel wiki-folder-modal">
@@ -3381,6 +3385,7 @@ function renderWikiFolderModal() {
         </header>
         <form class="form-grid" data-form="wiki-folder">
           <label class="field"><span>Nombre de la carpeta</span><input class="input" name="name" placeholder="Ej: Reinos, Personajes o Lugares" autocomplete="off" required /></label>
+          <label class="field"><span>Dentro de</span><select class="select" name="parentFolder"><option value="" ${!parent ? "selected" : ""}>Nivel principal</option>${wikiFoldersFor(campaign).map((folder) => `<option value="${escapeAttr(folder)}" ${folder === parent ? "selected" : ""}>${escapeHtml(folder)}</option>`).join("")}</select></label>
           ${wikiFoldersFor(campaign).length ? `<p class="muted small">Ya existen: ${wikiFoldersFor(campaign).map(escapeHtml).join(", ")}.</p>` : ""}
           <div class="wiki-confirm-actions"><button class="button" type="button" data-action="close-modal">Cancelar</button><button class="button primary" type="submit"><span class="icon">＋</span>Crear carpeta</button></div>
         </form>
@@ -3776,7 +3781,7 @@ document.addEventListener("submit", async (event) => {
   }
 
   if (formType === "wiki-folder") {
-    if (createWikiFolder(data.name)) {
+    if (createWikiFolder(data.name, data.parentFolder)) {
       editing = null;
       saveState();
       render();
@@ -4137,7 +4142,19 @@ document.addEventListener("click", async (event) => {
   }
 
   if (action === "new-wiki-folder") {
-    editing = { type: "wiki-folder" };
+    editing = { type: "wiki-folder", parentFolder: wikiFolder === "all" ? "" : wikiFolder };
+    render();
+  }
+
+  if (action === "context-new-folder") {
+    editing = { type: "wiki-folder", parentFolder: target.dataset.folder === "Sin carpeta" ? "" : target.dataset.folder };
+    wikiContextMenu = null;
+    render();
+  }
+
+  if (action === "context-new-card") {
+    editing = { type: "wiki-type", folder: target.dataset.folder || "Sin carpeta" };
+    wikiContextMenu = null;
     render();
   }
 
@@ -4231,7 +4248,59 @@ document.addEventListener("click", async (event) => {
   }
 });
 
+document.addEventListener("dragstart", (event) => {
+  const card = event.target.closest("[data-wiki-card-drag]");
+  if (!card) return;
+  draggedWikiCardId = card.dataset.wikiCardDrag;
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", draggedWikiCardId);
+  card.classList.add("dragging");
+});
+
+document.addEventListener("dragend", (event) => {
+  event.target.closest("[data-wiki-card-drag]")?.classList.remove("dragging");
+  document.querySelectorAll(".wiki-drop-target").forEach((element) => element.classList.remove("wiki-drop-target"));
+  draggedWikiCardId = null;
+});
+
+document.addEventListener("dragover", (event) => {
+  if (!draggedWikiCardId) return;
+  const target = event.target.closest("[data-wiki-folder-target], [data-wiki-root-target]");
+  if (!target) return;
+  event.preventDefault();
+  document.querySelectorAll(".wiki-drop-target").forEach((element) => element.classList.remove("wiki-drop-target"));
+  target.classList.add("wiki-drop-target");
+  event.dataTransfer.dropEffect = "move";
+});
+
+document.addEventListener("drop", (event) => {
+  const target = event.target.closest("[data-wiki-folder-target], [data-wiki-root-target]");
+  if (!target || !draggedWikiCardId) return;
+  event.preventDefault();
+  const folder = target.dataset.wikiFolderTarget || "Sin carpeta";
+  document.querySelectorAll(".wiki-drop-target").forEach((element) => element.classList.remove("wiki-drop-target"));
+  moveWikiPageToFolder(draggedWikiCardId, folder);
+  draggedWikiCardId = null;
+});
+
 document.addEventListener("contextmenu", (event) => {
+  const wikiTarget = event.target.closest("[data-wiki-folder-target], [data-wiki-card-drag]");
+  const campaign = campaignById(activeCampaignId);
+  if (wikiTarget && campaign && canManageCampaign(campaign, currentUser().id)) {
+    event.preventDefault();
+    const card = wikiTarget.closest("[data-wiki-card-drag]");
+    wikiContextMenu = {
+      folder: wikiTarget.dataset.wikiFolderTarget || card?.dataset.folder || (wikiFolder === "all" ? "Sin carpeta" : wikiFolder),
+      x: Math.min(event.clientX, window.innerWidth - 190),
+      y: Math.min(event.clientY, window.innerHeight - 110),
+    };
+    if (card) {
+      const item = wikiCardsFor(campaign).find((entry) => entry.id === card.dataset.wikiCardDrag);
+      wikiContextMenu.folder = item?.folder || "Sin carpeta";
+    }
+    render();
+    return;
+  }
   const viewport = event.target.closest("[data-map-viewport]");
   if (!viewport || viewport.dataset.canManage !== "true" || event.target.closest(".map-point, .map-upload-button, .map-overlay-tools, .map-context-picker")) return;
   const canvas = viewport.querySelector("[data-map-canvas]");
@@ -4250,6 +4319,13 @@ document.addEventListener("contextmenu", (event) => {
   };
   selectedMapPointId = null;
   render();
+});
+
+document.addEventListener("click", (event) => {
+  if (wikiContextMenu && !event.target.closest("[data-wiki-context-menu]")) {
+    wikiContextMenu = null;
+    render();
+  }
 });
 
 document.addEventListener("keydown", (event) => {
@@ -5157,10 +5233,12 @@ async function updateMapImageFromFile(mapId, file) {
   }
 }
 
-function createWikiFolder(value) {
+function createWikiFolder(value, parentFolder = "") {
   const campaign = campaignById(activeCampaignId);
   if (!campaign || !canManageCampaign(campaign, currentUser().id)) return false;
-  const folder = String(value || "").trim();
+  const name = String(value || "").trim().replaceAll("/", "");
+  const parent = String(parentFolder || "").trim();
+  const folder = parent ? `${parent}/${name}` : name;
   const folderKey = normalizeSearchText(folder);
   if (!folder) {
     showToast("Escribí un nombre para la carpeta.");
@@ -5189,7 +5267,7 @@ function moveWikiPageToFolder(id, value) {
   page.folder = folder;
   page.modifiedAt = Date.now();
   selectedWikiCardId = page.id;
-  wikiFolder = folder;
+  wikiFolder = folder === "Sin carpeta" ? "all" : folder;
   saveState();
   render();
   showToast(`Ficha movida a ${folder}.`);

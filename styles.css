@@ -1680,7 +1680,7 @@ p {
 
 .wiki-library {
   display: grid;
-  grid-template-columns: 240px 310px minmax(0, 1fr);
+  grid-template-columns: 240px minmax(0, 1fr);
   align-items: start;
   min-height: calc(100vh - 64px);
 }
@@ -1871,6 +1871,63 @@ p {
   top: 64px;
   height: calc(100vh - 64px);
   background: rgba(7, 10, 11, 0.9);
+}
+
+.wiki-inspector {
+  display: none;
+}
+
+.wiki-library-row.dragging {
+  opacity: 0.45;
+}
+
+.wiki-tree-folder.wiki-drop-target,
+.wiki-card-column.wiki-drop-target {
+  outline: 1px solid rgba(116, 208, 190, 0.9);
+  background: rgba(116, 208, 190, 0.13);
+}
+
+.wiki-card-column.wiki-drop-target .wiki-list-head::after {
+  content: "Soltar aquí para dejar la ficha fuera de las carpetas";
+  display: block;
+  margin-top: 5px;
+  color: #9fd8cb;
+  font-size: 10px;
+}
+
+.wiki-context-menu {
+  position: fixed;
+  z-index: 30;
+  display: grid;
+  min-width: 178px;
+  gap: 3px;
+  padding: 7px;
+  border: 1px solid rgba(116, 208, 190, 0.38);
+  border-radius: 9px;
+  background: #111718;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.48);
+}
+
+.wiki-context-menu > span {
+  padding: 3px 7px 5px;
+  color: #7f9290;
+  font-family: var(--mono);
+  font-size: 9px;
+}
+
+.wiki-context-menu button {
+  min-height: 31px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #e2e9e6;
+  font-size: 12px;
+  text-align: left;
+}
+
+.wiki-context-menu button:hover {
+  background: rgba(116, 208, 190, 0.13);
 }
 
 .wiki-list-head {
