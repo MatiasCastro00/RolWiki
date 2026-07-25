@@ -1647,6 +1647,37 @@ p {
   font-weight: 800;
 }
 
+.wiki-node.player-node {
+  z-index: 5;
+  max-width: 190px;
+  gap: 7px;
+  padding: 8px 11px;
+  border: 1px solid rgba(244, 217, 137, 0.8);
+  border-radius: 10px;
+  color: #fff3c8;
+  font-size: 13px;
+  font-weight: 800;
+  background: linear-gradient(135deg, rgba(104, 72, 25, 0.96), rgba(25, 20, 12, 0.96));
+  box-shadow: 0 0 0 3px rgba(244, 217, 137, 0.14), 0 11px 28px rgba(0, 0, 0, 0.48);
+}
+
+.wiki-node.player-node .wiki-node-icon {
+  color: #f4d989;
+  font-size: 19px;
+}
+
+.wiki-node.player-node .wiki-node-image,
+.wiki-node.has-image.player-node .wiki-node-image {
+  width: 78px;
+  height: 78px;
+  border-color: rgba(244, 217, 137, 0.85);
+}
+
+.wiki-node.player-node:hover {
+  background: linear-gradient(135deg, #846128, #2a210f);
+  transform: translate(-50%, -50%) scale(1.08);
+}
+
 .wiki-node-icon {
   color: #9bcbbf;
 }
