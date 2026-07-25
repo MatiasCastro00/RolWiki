@@ -384,6 +384,7 @@ const expandedWikiFolders = new Set();
 let wikiGraphRuntime = null;
 let wikiGraphClickSuppressedUntil = 0;
 let wikiGraphExpanded = false;
+let wikiGraphContextMenu = null;
 const wikiGraphNodeMemory = new Map();
 const wikiGraphCameraMemory = new Map();
 let selectedMapId = null;
@@ -1380,7 +1381,7 @@ function renderWikiGraph(cards, compact = false, canManage = false) {
   const cardById = new Map(sorted.map((card) => [card.id, card]));
   const edges = wikiRelations(sorted).filter((edge) => positionById.has(edge.sourceId) && positionById.has(edge.targetId));
   return `
-    <div class="wiki-graph ${compact ? "compact" : ""} ${wikiGraphExpanded ? "is-expanded" : ""}" data-wiki-graph aria-label="Mapa de relaciones de la wiki">
+    <div class="wiki-graph ${compact ? "compact" : ""} ${wikiGraphExpanded ? "is-expanded" : ""}" data-wiki-graph data-can-manage="${canManage}" aria-label="Mapa de relaciones de la wiki">
       <div class="wiki-graph-world" data-wiki-graph-world>
         <svg class="wiki-graph-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           ${edges.map((edge) => {
@@ -1411,7 +1412,7 @@ function renderWikiGraph(cards, compact = false, canManage = false) {
         }).join("")}
       </div>
       <div class="wiki-graph-toolbar">
-        <span class="wiki-graph-pan-hint">Arrastrá el fondo para mover la cámara</span>
+        <span class="wiki-graph-pan-hint">Arrastrá el fondo para mover la cámara · rueda para zoom</span>
         ${canManage ? `<button data-action="new-wiki-from-graph" title="Crear una ficha sin salir del mapa">＋ Nueva ficha</button>` : ""}
         <button data-action="toggle-wiki-graph-expanded" aria-pressed="${wikiGraphExpanded}" title="${wikiGraphExpanded ? "Reducir mapa" : "Ampliar mapa"}"><span data-expand-icon>${wikiGraphExpanded ? "↙" : "↗"}</span><span data-expand-label>${wikiGraphExpanded ? "Reducir" : "Ampliar"}</span></button>
       </div>
@@ -1419,9 +1420,18 @@ function renderWikiGraph(cards, compact = false, canManage = false) {
         <strong data-wiki-graph-focus-title></strong>
         <button data-action="edit-wiki-graph-card" data-id="">Editar ficha</button>
       </div>
+      ${canManage ? renderWikiGraphContextMenu() : ""}
       <div class="wiki-graph-legend"><span>${sorted.length} nodos</span><span>${edges.length} conexiones</span></div>
     </div>
   `;
+}
+
+function renderWikiGraphContextMenu() {
+  if (!wikiGraphContextMenu) return "";
+  return `<div class="wiki-graph-context-menu" style="left:${wikiGraphContextMenu.x}px;top:${wikiGraphContextMenu.y}px" data-wiki-graph-context-menu>
+    <header><span>NUEVA FICHA</span><small>Elegí un tipo para crearla aquí</small></header>
+    <div>${Object.entries(WIKI_CARD_TYPES).map(([key, type]) => `<button data-action="new-wiki-from-graph-type" data-wiki-type="${escapeAttr(key)}"><span>${type.icon}</span><strong>${escapeHtml(type.label)}</strong></button>`).join("")}</div>
+  </div>`;
 }
 
 function wikiGraphNodeKey(id) {
@@ -1632,7 +1642,7 @@ function setupWikiGraph(graph) {
     }))
     .filter((edge) => nodes.has(edge.sourceId) && nodes.has(edge.targetId));
 
-  const rememberedCamera = wikiGraphCameraMemory.get(wikiGraphCameraKey()) || { x: 0, y: 0 };
+  const rememberedCamera = wikiGraphCameraMemory.get(wikiGraphCameraKey()) || { x: 0, y: 0, scale: 1 };
   const graphState = {
     graph,
     world,
@@ -1641,23 +1651,45 @@ function setupWikiGraph(graph) {
     dragging: null,
     panning: null,
     focusedNodeId: null,
-    camera: { x: rememberedCamera.x || 0, y: rememberedCamera.y || 0 },
+    camera: { x: rememberedCamera.x || 0, y: rememberedCamera.y || 0, scale: rememberedCamera.scale || 1 },
   };
   for (const edge of edges.filter((item) => item.isCharacterConnection)) {
-    edge.sourceGlow = document.createElement("span");
-    edge.targetGlow = document.createElement("span");
-    edge.sourceGlow.className = "wiki-node-link-glow";
-    edge.targetGlow.className = "wiki-node-link-glow";
-    nodes.get(edge.sourceId).element.append(edge.sourceGlow);
-    nodes.get(edge.targetId).element.append(edge.targetGlow);
+    const sourceNode = nodes.get(edge.sourceId);
+    const targetNode = nodes.get(edge.targetId);
+    // La conexión dorada destaca al personaje jugador: el brillo pertenece a
+    // su tarjeta, no al NPC que está del otro lado de la relación.
+    if (sourceNode.element.classList.contains("player-node")) {
+      edge.sourceGlow = document.createElement("span");
+      edge.sourceGlow.className = "wiki-node-link-glow";
+      sourceNode.element.append(edge.sourceGlow);
+    }
+    if (targetNode.element.classList.contains("player-node")) {
+      edge.targetGlow = document.createElement("span");
+      edge.targetGlow.className = "wiki-node-link-glow";
+      targetNode.element.append(edge.targetGlow);
+    }
   }
   graph.addEventListener("pointerdown", (event) => {
     if (event.target.closest(".wiki-node[data-node-id]")) startWikiNodeDrag(event, graphState);
     else startWikiGraphPan(event, graphState);
   });
   graph.addEventListener("click", (event) => focusWikiGraphNode(event, graphState));
+  graph.addEventListener("contextmenu", (event) => openWikiGraphContextMenu(event, graph));
+  graph.addEventListener("wheel", (event) => zoomWikiGraph(event, graphState), { passive: false });
   renderWikiGraphFrame(graphState);
   return graphState;
+}
+
+function openWikiGraphContextMenu(event, graph) {
+  if (graph.dataset.canManage !== "true" || event.target.closest(".wiki-node, .wiki-graph-toolbar, .wiki-graph-focus-actions, .wiki-graph-context-menu, .wiki-graph-legend")) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const rect = graph.getBoundingClientRect();
+  wikiGraphContextMenu = {
+    x: Math.max(8, Math.min(rect.width - 264, event.clientX - rect.left)),
+    y: Math.max(8, Math.min(rect.height - 340, event.clientY - rect.top)),
+  };
+  render();
 }
 
 function focusWikiGraphNode(event, graphState) {
@@ -1732,6 +1764,24 @@ function startWikiGraphPan(event, graphState) {
   graphState.graph.addEventListener("pointercancel", stop);
 }
 
+function zoomWikiGraph(event, graphState) {
+  if (event.target.closest("button, input, select, textarea, a, .wiki-graph-context-menu")) return;
+  event.preventDefault();
+  const rect = graphState.graph.getBoundingClientRect();
+  const cursorX = event.clientX - rect.left;
+  const cursorY = event.clientY - rect.top;
+  const currentScale = graphState.camera.scale;
+  const nextScale = Math.max(0.55, Math.min(2.4, currentScale * (event.deltaY < 0 ? 1.12 : 1 / 1.12)));
+  if (nextScale === currentScale) return;
+  const worldX = (cursorX - graphState.camera.x) / currentScale;
+  const worldY = (cursorY - graphState.camera.y) / currentScale;
+  graphState.camera.x = Math.max(-1400, Math.min(1400, cursorX - worldX * nextScale));
+  graphState.camera.y = Math.max(-1100, Math.min(1100, cursorY - worldY * nextScale));
+  graphState.camera.scale = nextScale;
+  wikiGraphCameraMemory.set(wikiGraphCameraKey(), { ...graphState.camera });
+  renderWikiGraphFrame(graphState);
+}
+
 function startWikiNodeDrag(event, graphState) {
   const nodeElement = event.target.closest(".wiki-node[data-node-id]");
   if (!nodeElement || !graphState.graph.contains(nodeElement)) return;
@@ -1740,8 +1790,8 @@ function startWikiNodeDrag(event, graphState) {
   if (!node) return;
 
   const rect = graphState.graph.getBoundingClientRect();
-  const pointerX = ((event.clientX - rect.left - graphState.camera.x) / Math.max(rect.width, 1)) * 100;
-  const pointerY = ((event.clientY - rect.top - graphState.camera.y) / Math.max(rect.height, 1)) * 100;
+  const pointerX = ((event.clientX - rect.left - graphState.camera.x) / graphState.camera.scale / Math.max(rect.width, 1)) * 100;
+  const pointerY = ((event.clientY - rect.top - graphState.camera.y) / graphState.camera.scale / Math.max(rect.height, 1)) * 100;
   graphState.dragging = {
     node,
     pointerId: event.pointerId,
@@ -1766,8 +1816,8 @@ function startWikiNodeDrag(event, graphState) {
   function handleWikiNodeDragMove(moveEvent) {
     if (moveEvent.pointerId !== graphState.dragging?.pointerId) return;
     const moveRect = graphState.graph.getBoundingClientRect();
-    const nextX = ((moveEvent.clientX - moveRect.left - graphState.camera.x) / Math.max(moveRect.width, 1)) * 100 + graphState.dragging.offsetX;
-    const nextY = ((moveEvent.clientY - moveRect.top - graphState.camera.y) / Math.max(moveRect.height, 1)) * 100 + graphState.dragging.offsetY;
+    const nextX = ((moveEvent.clientX - moveRect.left - graphState.camera.x) / graphState.camera.scale / Math.max(moveRect.width, 1)) * 100 + graphState.dragging.offsetX;
+    const nextY = ((moveEvent.clientY - moveRect.top - graphState.camera.y) / graphState.camera.scale / Math.max(moveRect.height, 1)) * 100 + graphState.dragging.offsetY;
     node.x = clampGraphValue(nextX);
     node.y = clampGraphValue(nextY);
     node.vx = 0;
@@ -1859,7 +1909,7 @@ function stepWikiGraph(graphState, delta, time) {
 }
 
 function renderWikiGraphFrame(graphState) {
-  graphState.world.style.transform = `translate3d(${graphState.camera.x}px, ${graphState.camera.y}px, 0)`;
+  graphState.world.style.transform = `translate3d(${graphState.camera.x}px, ${graphState.camera.y}px, 0) scale(${graphState.camera.scale})`;
   for (const node of graphState.nodes.values()) {
     node.element.style.left = `${node.x}%`;
     node.element.style.top = `${node.y}%`;
@@ -1871,10 +1921,8 @@ function renderWikiGraphFrame(graphState) {
     edge.line.setAttribute("y1", source.y);
     edge.line.setAttribute("x2", target.x);
     edge.line.setAttribute("y2", target.y);
-    if (edge.sourceGlow && edge.targetGlow) {
-      positionWikiNodeConnectionGlow(edge.sourceGlow, target.x - source.x, target.y - source.y);
-      positionWikiNodeConnectionGlow(edge.targetGlow, source.x - target.x, source.y - target.y);
-    }
+    if (edge.sourceGlow) positionWikiNodeConnectionGlow(edge.sourceGlow, target.x - source.x, target.y - source.y);
+    if (edge.targetGlow) positionWikiNodeConnectionGlow(edge.targetGlow, source.x - target.x, source.y - target.y);
   }
 }
 
@@ -1884,7 +1932,6 @@ function positionWikiNodeConnectionGlow(glow, dx, dy) {
   const edgeY = 50 + (dy / edgeDistance) * 50;
   glow.style.left = `${edgeX}%`;
   glow.style.top = `${edgeY}%`;
-  glow.style.setProperty("--connection-angle", `${Math.atan2(dy, dx) * 180 / Math.PI}deg`);
 }
 
 function renderWikiHome(campaign, canManage) {
@@ -4260,7 +4307,14 @@ document.addEventListener("click", async (event) => {
   }
 
   if (action === "new-wiki-from-graph") {
+    wikiGraphContextMenu = null;
     editing = { type: "wiki-type", folder: "Sin carpeta", fromGraph: true };
+    render();
+  }
+
+  if (action === "new-wiki-from-graph-type") {
+    wikiGraphContextMenu = null;
+    editing = { type: "wiki", id: null, wikiType: target.dataset.wikiType, folder: "Sin carpeta", fromGraph: true };
     render();
   }
 
@@ -4611,6 +4665,10 @@ document.addEventListener("contextmenu", (event) => {
 document.addEventListener("click", (event) => {
   if (wikiContextMenu && !event.target.closest("[data-wiki-context-menu]")) {
     wikiContextMenu = null;
+    render();
+  }
+  if (wikiGraphContextMenu && !event.target.closest("[data-wiki-graph-context-menu]")) {
+    wikiGraphContextMenu = null;
     render();
   }
 });
