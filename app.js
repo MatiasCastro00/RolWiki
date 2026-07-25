@@ -1750,30 +1750,40 @@ function wikiFolderTree(campaign) {
     });
   });
 
+  wikiCardsFor(campaign).forEach((card) => {
+    const folder = String(card.folder || "Sin carpeta").trim() || "Sin carpeta";
+    const parts = folder === "Sin carpeta" ? [] : folder.split("/").map((part) => part.trim()).filter(Boolean);
+    let parent = root;
+    let path = "";
+    parts.forEach((part) => {
+      path = path ? `${path}/${part}` : part;
+      parent = findOrCreate(path, part, parent);
+    });
+    parent.cards.push(card);
+  });
   return root;
 }
 
 function renderWikiFolderTree(node, depth = 0) {
   return node.folders.map((folder) => {
     const isOpen = !expandedWikiFolders.has(folder.path);
-    const descendants = countWikiCardsInFolder(campaignById(activeCampaignId), folder.path);
+    const descendants = folder.cards.length + folder.folders.reduce((total, child) => total + countWikiTreeCards(child), 0);
     return `<div class="wiki-tree-node" style="--tree-depth:${depth}">
       <button class="wiki-tree-folder ${wikiFolder === folder.path ? "active" : ""}" data-action="filter-wiki-folder" data-folder="${escapeAttr(folder.path)}" data-wiki-folder-target="${escapeAttr(folder.path)}">
         <span class="wiki-tree-toggle" data-action="toggle-wiki-folder" data-folder="${escapeAttr(folder.path)}" role="button" tabindex="0" aria-label="${isOpen ? "Cerrar" : "Abrir"} ${escapeAttr(folder.name)}">${isOpen ? "⌄" : "›"}</span>
         <span class="wiki-tree-icon">▱</span><span>${escapeHtml(folder.name)}</span><small>${descendants}</small>
       </button>
-      ${isOpen ? `<div class="wiki-tree-children">${renderWikiFolderTree(folder, depth + 1)}</div>` : ""}
+      ${isOpen ? `<div class="wiki-tree-children">${renderWikiFolderTree(folder, depth + 1)}${folder.cards.map((card) => renderWikiTreeCard(card, depth + 1)).join("")}</div>` : ""}
     </div>`;
-  }).join("");
+  }).join("") + node.cards.map((card) => renderWikiTreeCard(card, depth)).join("");
 }
 
-function countWikiCardsInFolder(campaign, folder) {
-  const prefix = `${folder}/`;
-  return wikiCardsFor(campaign).filter((card) => card.folder === folder || card.folder.startsWith(prefix)).length;
+function countWikiTreeCards(node) {
+  return node.cards.length + node.folders.reduce((total, child) => total + countWikiTreeCards(child), 0);
 }
 
 function renderWikiTreeCard(card, depth) {
-  return `<button class="wiki-tree-card ${card.id === selectedWikiCardId ? "active" : ""}" style="--tree-depth:${depth}" data-action="select-wiki-card" data-id="${card.id}">${renderWikiThumb(card)}<span>${escapeHtml(card.title)}</span></button>`;
+  return `<button class="wiki-tree-card ${card.id === selectedWikiCardId ? "active" : ""}" style="--tree-depth:${depth}" draggable="true" data-action="select-wiki-card" data-id="${card.id}" data-wiki-card-drag="${card.id}">${renderWikiThumb(card)}<span>${escapeHtml(card.title)}</span></button>`;
 }
 
 function revealWikiFolder(folder) {
@@ -1804,13 +1814,13 @@ function renderWikiLibrary(campaign, canManage) {
   const allCards = wikiCardsFor(campaign);
   const cards = filteredWikiCards(campaign);
   const folders = wikiFoldersFor(campaign);
-  const selected = cards.find((card) => card.id === selectedWikiCardId) || cards[0] || null;
+  const selected = allCards.find((card) => card.id === selectedWikiCardId) || allCards[0] || null;
   if (selected && selectedWikiCardId !== selected.id) selectedWikiCardId = selected.id;
 
   return `
     <section class="wiki-library">
       ${renderWikiContextMenu(canManage)}
-      <aside class="wiki-folder-sidebar">
+      <aside class="wiki-folder-sidebar" data-wiki-root-target>
         <label class="wiki-search"><span>⌕</span><input data-wiki-search type="search" value="${escapeAttr(wikiSearch)}" placeholder="Buscar en la wiki" aria-label="Buscar en la wiki" /></label>
         <div class="wiki-tree-title"><span>CARPETAS</span><small>${folders.length}</small></div>
         <button class="wiki-folder ${wikiFolder === "all" ? "active" : ""}" data-action="filter-wiki-folder" data-folder="all"><span>▤</span>Todas las fichas<small>${allCards.length}</small></button>

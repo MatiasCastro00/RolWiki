@@ -1871,10 +1871,11 @@ p {
   top: 64px;
   height: calc(100vh - 64px);
   background: rgba(7, 10, 11, 0.9);
+  display: none;
 }
 
 .wiki-inspector {
-  display: none;
+  display: block;
 }
 
 .wiki-library-row.dragging {
@@ -4949,7 +4950,7 @@ p {
   }
 
   .wiki-library {
-    grid-template-columns: 210px 270px minmax(0, 1fr);
+    grid-template-columns: 210px minmax(0, 1fr);
   }
 
   .wiki-management-page {
