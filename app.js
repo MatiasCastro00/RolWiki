@@ -378,6 +378,7 @@ let wikiView = "home";
 let selectedWikiCardId = null;
 let wikiSearch = "";
 let wikiFolder = "all";
+const expandedWikiFolders = new Set();
 let wikiGraphRuntime = null;
 let wikiGraphClickSuppressedUntil = 0;
 const wikiGraphNodeMemory = new Map();
@@ -1722,7 +1723,74 @@ function wikiFoldersFor(campaign) {
     const key = normalizeSearchText(folder);
     if (folder && key && !uniqueFolders.has(key)) uniqueFolders.set(key, folder);
   }
-  return [...uniqueFolders.values()].sort((left, right) => left.localeCompare(right, "es"));
+  // The saved order is intentional: it is the order shown in the navigation.
+  return [...uniqueFolders.values()];
+}
+
+function wikiFolderTree(campaign) {
+  const root = { path: "", name: "", folders: [], cards: [] };
+  const nodes = new Map([["", root]]);
+  const findOrCreate = (path, name, parent) => {
+    if (nodes.has(path)) return nodes.get(path);
+    const node = { path, name, folders: [], cards: [] };
+    nodes.set(path, node);
+    parent.folders.push(node);
+    return node;
+  };
+
+  wikiFoldersFor(campaign).forEach((folder) => {
+    const parts = folder.split("/").map((part) => part.trim()).filter(Boolean);
+    let parent = root;
+    let path = "";
+    parts.forEach((part) => {
+      path = path ? `${path}/${part}` : part;
+      parent = findOrCreate(path, part, parent);
+    });
+  });
+
+  wikiCardsFor(campaign).forEach((card) => {
+    const folder = String(card.folder || "Sin carpeta").trim() || "Sin carpeta";
+    const parts = folder.split("/").map((part) => part.trim()).filter(Boolean);
+    let parent = root;
+    let path = "";
+    parts.forEach((part) => {
+      path = path ? `${path}/${part}` : part;
+      parent = findOrCreate(path, part, parent);
+    });
+    parent.cards.push(card);
+  });
+  return root;
+}
+
+function renderWikiFolderTree(node, depth = 0) {
+  return node.folders.map((folder) => {
+    const isOpen = !expandedWikiFolders.has(folder.path);
+    const descendants = folder.cards.length + folder.folders.reduce((total, child) => total + countWikiTreeCards(child), 0);
+    return `<div class="wiki-tree-node" style="--tree-depth:${depth}">
+      <button class="wiki-tree-folder ${wikiFolder === folder.path ? "active" : ""}" data-action="filter-wiki-folder" data-folder="${escapeAttr(folder.path)}">
+        <span class="wiki-tree-toggle" data-action="toggle-wiki-folder" data-folder="${escapeAttr(folder.path)}" role="button" tabindex="0" aria-label="${isOpen ? "Cerrar" : "Abrir"} ${escapeAttr(folder.name)}">${isOpen ? "⌄" : "›"}</span>
+        <span class="wiki-tree-icon">▱</span><span>${escapeHtml(folder.name)}</span><small>${descendants}</small>
+      </button>
+      ${isOpen ? `<div class="wiki-tree-children">${renderWikiFolderTree(folder, depth + 1)}${folder.cards.map((card) => renderWikiTreeCard(card, depth + 1)).join("")}</div>` : ""}
+    </div>`;
+  }).join("") + node.cards.map((card) => renderWikiTreeCard(card, depth)).join("");
+}
+
+function countWikiTreeCards(node) {
+  return node.cards.length + node.folders.reduce((total, child) => total + countWikiTreeCards(child), 0);
+}
+
+function renderWikiTreeCard(card, depth) {
+  return `<button class="wiki-tree-card ${card.id === selectedWikiCardId ? "active" : ""}" style="--tree-depth:${depth}" data-action="select-wiki-card" data-id="${card.id}">${renderWikiThumb(card)}<span>${escapeHtml(card.title)}</span></button>`;
+}
+
+function revealWikiFolder(folder) {
+  const parts = String(folder || "").split("/").map((part) => part.trim()).filter(Boolean);
+  let path = "";
+  parts.forEach((part) => {
+    path = path ? `${path}/${part}` : part;
+    expandedWikiFolders.delete(path);
+  });
 }
 
 function renderWikiFolderOptions(campaign, selectedFolder) {
@@ -1753,10 +1821,7 @@ function renderWikiLibrary(campaign, canManage) {
         <label class="wiki-search"><span>⌕</span><input data-wiki-search type="search" value="${escapeAttr(wikiSearch)}" placeholder="Buscar en la wiki" aria-label="Buscar en la wiki" /></label>
         <div class="wiki-tree-title"><span>CARPETAS</span><small>${folders.length}</small></div>
         <button class="wiki-folder ${wikiFolder === "all" ? "active" : ""}" data-action="filter-wiki-folder" data-folder="all"><span>▤</span>Todas las fichas<small>${allCards.length}</small></button>
-        ${folders.map((folder) => {
-          const count = allCards.filter((card) => card.folder === folder).length;
-          return `<button class="wiki-folder ${wikiFolder === folder ? "active" : ""}" data-action="filter-wiki-folder" data-folder="${escapeAttr(folder)}"><span>▱</span>${escapeHtml(folder)}<small>${count}</small></button>`;
-        }).join("")}
+        <div class="wiki-folder-tree">${renderWikiFolderTree(wikiFolderTree(campaign))}</div>
         ${canManage ? `<button class="wiki-new-folder" data-action="new-wiki-folder"><span>＋</span>Nueva carpeta</button>` : ""}
       </aside>
       <section class="wiki-card-column">
@@ -4095,6 +4160,8 @@ document.addEventListener("click", async (event) => {
   if (action === "select-wiki-card") {
     activeTab = "wiki";
     selectedWikiCardId = id;
+    const card = campaignById(activeCampaignId)?.wiki.find((item) => item.id === id);
+    if (card) revealWikiFolder(card.folder);
     wikiView = "cards";
     render();
   }
@@ -4103,6 +4170,14 @@ document.addEventListener("click", async (event) => {
     activeTab = "wiki";
     wikiFolder = target.dataset.folder || "all";
     selectedWikiCardId = null;
+    render();
+  }
+
+  if (action === "toggle-wiki-folder") {
+    const folder = target.dataset.folder;
+    if (!folder) return;
+    if (expandedWikiFolders.has(folder)) expandedWikiFolders.delete(folder);
+    else expandedWikiFolders.add(folder);
     render();
   }
 

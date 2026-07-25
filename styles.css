@@ -1681,6 +1681,7 @@ p {
 .wiki-library {
   display: grid;
   grid-template-columns: 240px 310px minmax(0, 1fr);
+  align-items: start;
   min-height: calc(100vh - 64px);
 }
 
@@ -1693,6 +1694,11 @@ p {
 
 .wiki-folder-sidebar {
   padding: 16px 12px;
+  position: sticky;
+  top: 64px;
+  height: calc(100vh - 64px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .wiki-search,
@@ -1751,6 +1757,85 @@ p {
   color: #596164;
 }
 
+.wiki-folder-tree {
+  display: grid;
+  gap: 1px;
+}
+
+.wiki-tree-node,
+.wiki-tree-children {
+  display: grid;
+  gap: 1px;
+}
+
+.wiki-tree-folder,
+.wiki-tree-card {
+  display: grid;
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #aeb4b3;
+  font-size: 12px;
+  text-align: left;
+}
+
+.wiki-tree-folder {
+  grid-template-columns: 14px 18px minmax(0, 1fr) auto;
+  gap: 5px;
+  padding: 0 8px 0 calc(8px + var(--tree-depth, 0) * 16px);
+}
+
+.wiki-tree-card {
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 7px;
+  padding: 3px 8px 3px calc(27px + var(--tree-depth, 0) * 16px);
+}
+
+.wiki-tree-card .wiki-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+}
+
+.wiki-tree-folder > span:nth-child(3),
+.wiki-tree-card > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wiki-tree-toggle {
+  color: #6e7878;
+  font-size: 15px;
+  line-height: 1;
+  text-align: center;
+}
+
+.wiki-tree-icon {
+  color: #c5cecb;
+}
+
+.wiki-tree-folder small {
+  color: #596164;
+  font-size: 10px;
+}
+
+.wiki-tree-folder:hover,
+.wiki-tree-folder.active,
+.wiki-tree-card:hover,
+.wiki-tree-card.active {
+  background: rgba(255, 255, 255, 0.07);
+  color: #f1f3f2;
+}
+
+.wiki-tree-card.active {
+  box-shadow: inset 2px 0 #74d0be;
+}
+
 .wiki-new-folder {
   display: flex;
   width: calc(100% - 16px);
@@ -1782,6 +1867,9 @@ p {
 .wiki-card-column {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  position: sticky;
+  top: 64px;
+  height: calc(100vh - 64px);
   background: rgba(7, 10, 11, 0.9);
 }
 
@@ -1854,7 +1942,7 @@ p {
 
 .wiki-inspector {
   min-width: 0;
-  overflow: auto;
+  min-height: calc(100vh - 64px);
   background:
     radial-gradient(circle at 100% 0%, rgba(48, 107, 101, 0.09), transparent 32rem),
     #090c0e;
@@ -4907,6 +4995,9 @@ p {
 
   .wiki-folder-sidebar,
   .wiki-management-sidebar {
+    position: static;
+    height: auto;
+    overflow-y: visible;
     overflow-x: auto;
     padding: 10px;
     white-space: nowrap;
@@ -4958,6 +5049,9 @@ p {
   }
 
   .wiki-card-column {
+    position: static;
+    top: auto;
+    height: 300px;
     max-height: 300px;
     border-right: 0;
     border-bottom: 1px solid rgba(255, 255, 255, 0.075);
