@@ -742,14 +742,17 @@ function campaignRoute(campaign = campaignById(activeCampaignId)) {
   const section = activeTab === "wiki"
     ? (wikiView === "cards" ? "tarjetas" : "inicio")
     : ({ maps: "mapas", characters: "personajes", members: "jugadores", settings: "ajustes" }[activeTab] || "inicio");
-  let route = `${routeSlug(campaign.title)}--${campaign.id}/${section}`;
+  const routeParts = [`--${campaign.id}`, routeSlug(campaign.title), section];
 
   if (section === "tarjetas" && selectedWikiCardId) {
     const card = wikiCardsFor(campaign).find((item) => item.id === selectedWikiCardId);
-    if (card) route += `/${routeSlug(card.title)}--${card.id}`;
+    if (card) {
+      routeParts.unshift(card.id);
+      routeParts.push(routeSlug(card.title));
+    }
   }
 
-  return route;
+  return routeParts.join("/");
 }
 
 function setCampaignRoute() {
@@ -761,7 +764,17 @@ function getRoute() {
   const hash = window.location.hash.replace(/^#/, "");
   if (!hash) return { view: "app" };
   if (hash.startsWith("/")) {
-    const [campaignSlug, section = "inicio", item = ""] = hash.slice(1).split("/").map(decodeURIComponent);
+    const parts = hash.slice(1).split("/").map(decodeURIComponent);
+    if (parts[0]?.startsWith("--")) {
+      const [campaignId, campaignSlug, section = "inicio", item = ""] = parts;
+      return { view: "campaign-path", campaignId: campaignId.slice(2), campaignSlug, section, item };
+    }
+    if (parts[1]?.startsWith("--")) {
+      const [cardId, campaignId, campaignSlug, section = "inicio", item = ""] = parts;
+      return { view: "campaign-path", cardId, campaignId: campaignId.slice(2), campaignSlug, section, item };
+    }
+    // Formato anterior: /nombre--id/seccion/nombre--id
+    const [campaignSlug, section = "inicio", item = ""] = parts;
     return { view: "campaign-path", campaignSlug, section, item };
   }
   const params = new URLSearchParams(hash);
@@ -807,7 +820,8 @@ function render() {
   }
 
   if (route.view === "campaign-path") {
-    const campaign = state.campaigns.find((item) => item.id === routeItemId(route.campaignSlug))
+    const campaign = state.campaigns.find((item) => item.id === route.campaignId)
+      || state.campaigns.find((item) => item.id === routeItemId(route.campaignSlug))
       || state.campaigns.find((item) => routeSlug(item.title) === route.campaignSlug);
     if (campaign && isCampaignMember(campaign, currentUser().id)) {
       activeCampaignId = campaign.id;
@@ -820,8 +834,8 @@ function render() {
       activeTab = sections[section];
       wikiView = section === "tarjetas" ? "cards" : "home";
       selectedWikiCardId = null;
-      if (section === "tarjetas" && route.item) {
-        const card = wikiCardsFor(campaign).find((item) => item.id === routeItemId(route.item));
+      if (section === "tarjetas" && (route.cardId || route.item)) {
+        const card = wikiCardsFor(campaign).find((item) => item.id === route.cardId || item.id === routeItemId(route.item));
         if (card) {
           selectedWikiCardId = card.id;
           revealWikiFolder(card.folder);
