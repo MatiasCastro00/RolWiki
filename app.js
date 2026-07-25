@@ -43,15 +43,6 @@ const PRESET_CAMPAIGN_TAGS = [
 ];
 
 const WIKI_CARD_TYPES = {
-  player: {
-    label: "Player",
-    icon: "♙",
-    description: "Personajes jugables vinculados a un jugador de la partida.",
-    fields: [
-      ["Rol en la partida", "role", "Ej: Exploradora del grupo"],
-      ["Estado", "status", "Ej: Activo"],
-    ],
-  },
   personaje: {
     label: "Personaje",
     icon: "♙",
@@ -1225,7 +1216,7 @@ function wikiCardsFor(campaign) {
   return (campaign?.wiki || []).map((page) => ({
     ...page,
     title: page.title || "Sin título",
-    type: page.type || wikiTypeFromLegacyCategory(page.category),
+    type: page.type === "player" ? "personaje" : (page.type || wikiTypeFromLegacyCategory(page.category)),
     description: page.description ?? page.content ?? "",
     aliases: [...new Set([page.title || "Sin título", ...(Array.isArray(page.aliases) ? page.aliases : [])])],
     folder: page.folder || WIKI_CARD_TYPES[page.type]?.label || page.category || "Notas",
@@ -1233,6 +1224,7 @@ function wikiCardsFor(campaign) {
     propertyItems: normalizedWikiPropertyItems(page),
     contentBlocks: normalizedWikiContentBlocks(page),
     relations: Array.isArray(page.relations) ? page.relations : [],
+    isPlayerCharacter: Boolean(page.isPlayerCharacter || page.type === "player"),
     playerId: String(page.playerId || ""),
     modifiedAt: page.modifiedAt || page.createdAt || Date.now(),
     createdAt: page.createdAt || page.modifiedAt || Date.now(),
@@ -1303,7 +1295,7 @@ function renderWikiGraph(cards, compact = false) {
     return `<div class="wiki-graph-empty"><span>◇</span><strong>El mapa está vacío</strong><small>Las conexiones aparecerán cuando una ficha mencione a otra.</small></div>`;
   }
   const sorted = [...cards]
-    .sort((a, b) => Number(b.type === "player") - Number(a.type === "player") || (b.modifiedAt || 0) - (a.modifiedAt || 0))
+    .sort((a, b) => Number(b.isPlayerCharacter) - Number(a.isPlayerCharacter) || (b.modifiedAt || 0) - (a.modifiedAt || 0))
     .slice(0, compact ? 18 : 36);
   const positions = wikiGraphPositions(sorted);
   const positionById = new Map(positions.map((position) => [position.id, position]));
@@ -1320,7 +1312,7 @@ function renderWikiGraph(cards, compact = false) {
       ${sorted.map((card, index) => {
         const position = positionById.get(card.id);
         const type = wikiType(card);
-        const isPlayer = card.type === "player";
+        const isPlayer = card.isPlayerCharacter;
         const imageUrl = String(card.imageUrl || "").trim();
         const hasImage = Boolean(imageUrl);
         const nodeVisual = hasImage
@@ -1879,20 +1871,21 @@ function renderWikiContextMenu(canManage) {
 function renderWikiInspector(card, allCards, canManage) {
   const campaign = campaignById(activeCampaignId);
   const type = wikiType(card);
-  const assignedPlayer = card.type === "player" ? state.users.find((user) => user.id === card.playerId) : null;
+  const canEdit = canEditWikiCard(campaign, card, currentUser().id);
+  const assignedPlayer = card.isPlayerCharacter ? state.users.find((user) => user.id === card.playerId) : null;
   const edges = wikiRelations(allCards).filter((edge) => edge.sourceId === card.id || edge.targetId === card.id);
   const related = edges.map((edge) => allCards.find((item) => item.id === (edge.sourceId === card.id ? edge.targetId : edge.sourceId))).filter(Boolean);
   const properties = normalizedWikiPropertyItems(card).filter((item) => item.value.trim());
   const contentBlocks = normalizedWikiContentBlocks(card);
   const linkedMap = mapsFor(campaign).find((map) => map.cardId === card.id);
-  const playerAssignment = card.type === "player"
+  const playerAssignment = card.isPlayerCharacter
     ? `<div class="wiki-property-row wiki-player-property"><span>♙ JUGADOR</span><div><strong>${escapeHtml(assignedPlayer?.name || "Sin asignar")}</strong></div></div>`
     : "";
   return `
     <article class="wiki-card-detail">
       <header class="wiki-detail-head">
         <div><span class="wiki-detail-type">${type.icon} ${type.label}</span><h1>${escapeHtml(card.title)}</h1></div>
-        ${canManage ? `<div class="wiki-detail-actions"><button data-action="edit-wiki" data-id="${card.id}" title="Editar" aria-label="Editar ${escapeAttr(card.title)}">✎</button><button class="danger" data-action="delete-wiki" data-id="${card.id}" title="Eliminar" aria-label="Eliminar ${escapeAttr(card.title)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-1 11H8L7 9Zm3 2v7h2v-7h-2Zm4 0v7h2v-7h-2Z" /></svg></button></div>` : ""}
+        ${canEdit || canManage ? `<div class="wiki-detail-actions">${canEdit ? `<button data-action="edit-wiki" data-id="${card.id}" title="Editar" aria-label="Editar ${escapeAttr(card.title)}">✎</button>` : ""}${canManage ? `<button class="danger" data-action="delete-wiki" data-id="${card.id}" title="Eliminar" aria-label="Eliminar ${escapeAttr(card.title)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-1 11H8L7 9Zm3 2v7h2v-7h-2Zm4 0v7h2v-7h-2Z" /></svg></button>` : ""}</div>` : ""}
       </header>
       <div class="wiki-detail-grid">
         <div class="wiki-detail-main">
@@ -3610,7 +3603,10 @@ function renderWikiModal(pageId) {
     relations: [],
     imageUrl: "",
     isPublic: true,
+    isPlayerCharacter: false,
   };
+  const canManage = canManageCampaign(campaign, currentUser().id);
+  const canChangePlayerAssignment = canManage || !pageId;
   const type = wikiType(page);
   const cards = wikiCardsFor(campaign);
   const properties = wikiEditorPropertyItems(page, type);
@@ -3632,13 +3628,16 @@ function renderWikiModal(pageId) {
           <div class="wiki-form-columns">
             <div class="wiki-form-main">
               <label class="field wiki-title-field"><span>Nombre</span><input class="input wiki-title-input" name="title" value="${escapeAttr(page.title)}" placeholder="Ej: Aureon el Radiante" required /></label>
-              <label class="field"><span>Tipo de ficha</span><select class="select" name="type">${Object.entries(WIKI_CARD_TYPES).map(([key, item]) => `<option value="${key}" ${page.type === key ? "selected" : ""}>${item.icon} ${item.label}</option>`).join("")}</select></label>
-              <section class="wiki-player-assignment ${page.type === "player" ? "" : "hidden"}" data-player-assignment>
-                <label class="field"><span>Jugador asignado</span><select class="select" name="playerId"><option value="">Sin asignar</option>${campaign.members.map((member) => {
+              <label class="field"><span>Tipo de ficha</span><select class="select" name="type" ${canChangePlayerAssignment ? "" : "disabled"}>${Object.entries(WIKI_CARD_TYPES).map(([key, item]) => `<option value="${key}" ${page.type === key ? "selected" : ""}>${item.icon} ${item.label}</option>`).join("")}</select></label>
+              <section class="wiki-player-assignment" data-player-assignment>
+                <label class="toggle-field"><input name="isPlayerCharacter" type="checkbox" ${page.isPlayerCharacter ? "checked" : ""} ${canChangePlayerAssignment ? "" : "disabled"} /><span>Es personaje de jugador</span></label>
+                <div class="${page.isPlayerCharacter ? "" : "hidden"}" data-player-owner>
+                  <label class="field"><span>Jugador asignado</span><select class="select" name="playerId" ${canChangePlayerAssignment ? "" : "disabled"}><option value="">Sin asignar</option>${campaign.members.map((member) => {
                   const user = state.users.find((item) => item.id === member.userId);
                   return `<option value="${escapeAttr(member.userId)}" ${page.playerId === member.userId ? "selected" : ""}>${escapeHtml(user?.name || "Usuario")}</option>`;
-                }).join("")}</select></label>
-                <small>Este Player se destacará en el mapa de nodos.${assignedPlayer ? ` Actualmente: ${escapeHtml(assignedPlayer.name)}.` : ""}</small>
+                  }).join("")}</select></label>
+                  <small>El personaje se destacará en el mapa de nodos.${assignedPlayer ? ` Actualmente: ${escapeHtml(assignedPlayer.name)}.` : ""}</small>
+                </div>
               </section>
               <label class="field"><span>Aliases <small>el nombre siempre cuenta como alias</small></span><div class="wiki-alias-editor"><em data-primary-alias>${escapeHtml(page.title || "Nombre de la ficha")}</em><div class="wiki-alias-chips" data-alias-list>${extraAliases.map((alias, index) => wikiAliasChip(alias, index, mapDisplay)).join("")}</div><div class="wiki-alias-add"><input class="input" data-wiki-alias-input placeholder="Escribí un alias y agregalo" /><button type="button" data-action="add-wiki-alias">＋</button></div></div></label>
 
@@ -4235,6 +4234,9 @@ document.addEventListener("click", async (event) => {
   }
 
   if (action === "edit-wiki") {
+    const campaign = campaignById(activeCampaignId);
+    const card = campaign?.wiki.find((item) => item.id === id);
+    if (!card || !canEditWikiCard(campaign, card, currentUser().id)) return;
     editing = { type: "wiki", id };
     render();
   }
@@ -4437,9 +4439,9 @@ function refreshStatBlock5e(editor) {
 }
 
 document.addEventListener("change", (event) => {
-  const wikiTypeSelect = event.target.closest('.wiki-card-form select[name="type"]');
-  if (wikiTypeSelect) {
-    wikiTypeSelect.closest("form")?.querySelector("[data-player-assignment]")?.classList.toggle("hidden", wikiTypeSelect.value !== "player");
+  const playerCharacterToggle = event.target.closest('.wiki-card-form input[name="isPlayerCharacter"]');
+  if (playerCharacterToggle) {
+    playerCharacterToggle.closest("[data-player-assignment]")?.querySelector("[data-player-owner]")?.classList.toggle("hidden", !playerCharacterToggle.checked);
   }
 
   const folderSelect = event.target.closest("[data-wiki-folder-move]");
@@ -4949,7 +4951,18 @@ function confirmWikiImport() {
 async function saveWikiPage(data) {
   const campaign = campaignById(activeCampaignId);
   const existing = editing.id ? campaign.wiki.find((page) => page.id === editing.id) : null;
-  const type = WIKI_CARD_TYPES[data.type] ? data.type : "nota";
+  const canManage = canManageCampaign(campaign, currentUser().id);
+  if (!canManage && (!existing || !canEditWikiCard(campaign, existing, currentUser().id))) {
+    showToast("No tenés permiso para editar esta ficha.");
+    return false;
+  }
+  const existingType = existing?.type === "player" ? "personaje" : existing?.type;
+  const requestedType = canManage ? data.type : existingType;
+  const type = WIKI_CARD_TYPES[requestedType] ? requestedType : "nota";
+  const isPlayerCharacter = canManage ? Boolean(data.isPlayerCharacter) : Boolean(existing?.isPlayerCharacter || existing?.type === "player");
+  const playerId = canManage
+    ? (isPlayerCharacter && campaign.members.some((member) => member.userId === data.playerId) ? data.playerId : "")
+    : String(existing?.playerId || "");
   const propertyItems = await wikiPropertyItemsFromData(data);
   if (propertyItems === null) return false;
   const properties = Object.fromEntries(propertyItems.filter((item) => item.value).map((item) => [item.label, item.value]));
@@ -4990,7 +5003,8 @@ async function saveWikiPage(data) {
     content: description,
     imageUrl: String(data.imageUrl || "").trim(),
     relations: relationIds,
-    playerId: type === "player" && campaign.members.some((member) => member.userId === data.playerId) ? data.playerId : "",
+    isPlayerCharacter,
+    playerId: isPlayerCharacter ? playerId : "",
     isPublic: data.isPublic === "true",
     modifiedAt: Date.now(),
   };
@@ -5407,6 +5421,11 @@ function displayRoleFor(campaign, userId) {
 function canManageCampaign(campaign, userId) {
   const displayRole = displayRoleFor(campaign, userId);
   return displayRole === "owner" || displayRole === "editor";
+}
+
+function canEditWikiCard(campaign, card, userId) {
+  return canManageCampaign(campaign, userId)
+    || Boolean(card && (card.isPlayerCharacter || card.type === "player") && card.playerId === userId);
 }
 
 function isCampaignMember(campaign, userId) {

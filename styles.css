@@ -1678,6 +1678,27 @@ p {
   transform: translate(-50%, -50%) scale(1.08);
 }
 
+.wiki-player-assignment {
+  display: grid;
+  gap: 8px;
+}
+
+.toggle-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  width: fit-content;
+  color: #dfe9e5;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.toggle-field input {
+  width: 17px;
+  height: 17px;
+  accent-color: #68c3b2;
+}
+
 .wiki-node-icon {
   color: #9bcbbf;
 }
