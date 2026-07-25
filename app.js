@@ -1213,7 +1213,7 @@ function normalizedWikiContentBlocks(page) {
 }
 
 function wikiCardsFor(campaign) {
-  const cards = (campaign?.wiki || []).map((page) => ({
+  return (campaign?.wiki || []).map((page) => ({
     ...page,
     title: page.title || "Sin título",
     type: page.type || wikiTypeFromLegacyCategory(page.category),
@@ -1227,24 +1227,6 @@ function wikiCardsFor(campaign) {
     modifiedAt: page.modifiedAt || page.createdAt || Date.now(),
     createdAt: page.createdAt || page.modifiedAt || Date.now(),
   }));
-  const seen = new Set();
-  return cards.filter((card) => {
-    // Importaciones repetidas pueden generar IDs distintos para la misma ficha.
-    // Conservamos fichas homónimas si su contenido es diferente.
-    const key = [
-      normalizeSearchText(card.title),
-      normalizeSearchText(card.folder),
-      card.type,
-      JSON.stringify(card.aliases || []),
-      String(card.description || ""),
-      String(card.imageUrl || ""),
-      JSON.stringify(card.properties || {}),
-      JSON.stringify(card.contentBlocks || []),
-    ].join("\u001f");
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 function wikiTypeFromLegacyCategory(category) {
@@ -1791,7 +1773,7 @@ function renderWikiFolderTree(node, depth = 0) {
         <span class="wiki-tree-toggle" data-action="toggle-wiki-folder" data-folder="${escapeAttr(folder.path)}" role="button" tabindex="0" aria-label="${isOpen ? "Cerrar" : "Abrir"} ${escapeAttr(folder.name)}">${isOpen ? "⌄" : "›"}</span>
         <span class="wiki-tree-icon">▱</span><span>${escapeHtml(folder.name)}</span><small>${descendants}</small>
       </button>
-      ${isOpen ? `<div class="wiki-tree-children">${renderWikiFolderTree(folder, depth + 1)}${folder.cards.map((card) => renderWikiTreeCard(card, depth + 1)).join("")}</div>` : ""}
+      ${isOpen ? `<div class="wiki-tree-children">${renderWikiFolderTree(folder, depth + 1)}</div>` : ""}
     </div>`;
   }).join("") + node.cards.map((card) => renderWikiTreeCard(card, depth)).join("");
 }
