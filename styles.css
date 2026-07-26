@@ -1259,13 +1259,152 @@ p {
   z-index: 16;
 }
 
+.wiki-app-shell > .ambient-cosmos {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ambient-star-field,
+.ambient-comets,
+.ambient-map-routes {
+  display: none;
+}
+
+.ambient-sky .ambient-star-field {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.ambient-star-field i,
+.graph-star-field i {
+  position: absolute;
+  left: var(--star-x);
+  top: var(--star-y);
+  width: var(--star-size);
+  height: var(--star-size);
+  border-radius: 50%;
+  background: hsl(var(--star-hue) 82% 90%);
+  opacity: 0.62;
+  box-shadow:
+    0 0 5px hsl(var(--star-hue) 86% 82% / 0.76),
+    0 0 14px hsl(var(--star-hue) 92% 70% / 0.22);
+}
+
+.ambient-motion .ambient-star-field i,
+.ambient-motion .graph-star-field i {
+  animation: ambient-star-twinkle var(--star-duration) ease-in-out var(--star-delay) infinite alternate;
+}
+
+.ambient-motion.ambient-sky .ambient-comets {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.ambient-comets i,
+.graph-comets i {
+  position: absolute;
+  top: var(--comet-top);
+  left: -18vw;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fff6d2;
+  box-shadow: 0 0 7px #fff, 0 0 16px #9ddcff;
+  opacity: 0;
+}
+
+.ambient-comets i::after,
+.graph-comets i::after {
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  width: 150px;
+  height: 2px;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(126, 195, 226, 0.16) 36%, rgba(226, 242, 255, 0.86));
+  transform: translateY(-50%);
+  transform-origin: right center;
+}
+
+.ambient-motion.ambient-sky .ambient-comets i {
+  animation: ambient-comet-flight var(--comet-duration) linear var(--comet-delay) infinite;
+}
+
+.ambient-map .ambient-map-routes {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: var(--ambient-intensity, 0.68);
+}
+
+.ambient-map-routes path {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.ambient-map-routes .map-coast {
+  stroke: rgba(95, 66, 36, 0.48);
+  stroke-width: 1.4;
+}
+
+.ambient-map-routes .map-route {
+  stroke: rgba(219, 181, 107, 0.64);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 1 10;
+}
+
+.ambient-map-routes .map-route.secondary {
+  stroke: color-mix(in srgb, var(--ambient-accent) 42%, rgba(180, 145, 83, 0.5));
+  stroke-width: 1.5;
+  stroke-dasharray: 1 13;
+}
+
+.ambient-map-routes .map-waypoints circle {
+  fill: rgba(80, 46, 20, 0.88);
+  stroke: rgba(231, 196, 128, 0.7);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.ambient-map .ambient-cosmos::before,
+.ambient-map .ambient-cosmos::after {
+  position: absolute;
+  inset: -8%;
+  content: "";
+  pointer-events: none;
+}
+
+.ambient-map .ambient-cosmos::before {
+  background:
+    radial-gradient(ellipse at 8% 22%, rgba(15, 7, 3, 0.9) 0 3%, rgba(87, 35, 12, 0.62) 5%, rgba(130, 76, 32, 0.23) 9%, transparent 16%),
+    radial-gradient(ellipse at 92% 74%, rgba(13, 6, 3, 0.92) 0 5%, rgba(92, 39, 15, 0.62) 8%, rgba(133, 77, 32, 0.2) 12%, transparent 20%),
+    radial-gradient(ellipse at 58% 4%, rgba(19, 8, 3, 0.82) 0 3%, rgba(111, 53, 17, 0.45) 7%, transparent 14%);
+  filter: blur(3px);
+  mix-blend-mode: multiply;
+}
+
+.ambient-map .ambient-cosmos::after {
+  background:
+    radial-gradient(ellipse at 16% 84%, transparent 0 11%, rgba(51, 24, 9, 0.32) 12%, transparent 14%),
+    radial-gradient(ellipse at 72% 34%, transparent 0 7%, rgba(62, 31, 11, 0.24) 8%, transparent 10%);
+}
+
 .ambient-map::before {
   background:
-    radial-gradient(ellipse at 18% 30%, transparent 0 14%, color-mix(in srgb, var(--ambient-accent) 26%, transparent) 14.3%, transparent 14.8%),
-    radial-gradient(ellipse at 76% 62%, transparent 0 18%, rgba(213, 179, 107, 0.2) 18.3%, transparent 18.8%),
-    repeating-radial-gradient(ellipse at 42% 46%, transparent 0 34px, rgba(205, 178, 117, 0.09) 35px, transparent 37px),
-    radial-gradient(circle at 30% 70%, rgba(68, 112, 91, 0.22), transparent 24%),
-    linear-gradient(118deg, #2b251b, #151914 48%, #1b1712);
+    radial-gradient(ellipse at 18% 30%, transparent 0 14%, rgba(108, 75, 40, 0.28) 14.3%, transparent 14.8%),
+    radial-gradient(ellipse at 76% 62%, transparent 0 18%, rgba(117, 78, 38, 0.25) 18.3%, transparent 18.8%),
+    repeating-radial-gradient(ellipse at 42% 46%, transparent 0 46px, rgba(90, 59, 28, 0.12) 47px, transparent 49px),
+    radial-gradient(circle at 30% 70%, rgba(68, 91, 60, 0.2), transparent 24%),
+    repeating-linear-gradient(4deg, rgba(72, 42, 18, 0.035) 0 1px, transparent 1px 9px),
+    linear-gradient(118deg, #4a3923, #28281c 48%, #3b2b19);
 }
 
 .ambient-atlas::before {
@@ -1297,11 +1436,10 @@ p {
 .ambient-sky::before {
   background:
     radial-gradient(circle at 78% 16%, rgba(247, 229, 181, 0.72) 0 1.2%, rgba(183, 208, 222, 0.2) 1.5%, transparent 7%),
-    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.72) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 62% 48%, rgba(255, 255, 255, 0.58) 0 1px, transparent 1.6px),
-    radial-gradient(circle at 42% 80%, color-mix(in srgb, var(--ambient-accent) 42%, transparent), transparent 28%),
+    radial-gradient(ellipse at 24% 72%, rgba(70, 62, 148, 0.3), transparent 31%),
+    radial-gradient(ellipse at 58% 82%, color-mix(in srgb, var(--ambient-accent) 40%, transparent), transparent 30%),
+    radial-gradient(ellipse at 91% 58%, rgba(68, 111, 168, 0.22), transparent 25%),
     linear-gradient(155deg, #060713, #11142b 52%, #08171c);
-  background-size: auto, 83px 83px, 127px 127px, auto, auto;
 }
 
 .ambient-tapestry::before {
@@ -1343,7 +1481,21 @@ p {
 }
 
 @keyframes ambient-sky-drift {
-  to { background-position: 0 0, 34px 18px, -42px 22px, 8% -4%, 0 0; }
+  to { background-position: 0 0, 4% -3%, -5% 2%, 3% 4%, 0 0; }
+}
+
+@keyframes ambient-star-twinkle {
+  0%, 18% { opacity: 0.18; transform: scale(0.62); filter: brightness(0.8); }
+  48% { opacity: 0.92; transform: scale(1.08); filter: brightness(1.45); }
+  72% { opacity: 0.4; transform: scale(0.82); filter: brightness(1); }
+  100% { opacity: 1; transform: scale(1.28); filter: brightness(1.7); }
+}
+
+@keyframes ambient-comet-flight {
+  0%, 72% { opacity: 0; transform: translate3d(-12vw, -8vh, 0) rotate(-18deg) scale(var(--comet-scale, 1)); }
+  75% { opacity: 0.94; }
+  96% { opacity: 0.82; }
+  100% { opacity: 0; transform: translate3d(138vw, 46vh, 0) rotate(-18deg) scale(var(--comet-scale, 1)); }
 }
 
 .wiki-commandbar {
@@ -1678,33 +1830,147 @@ p {
   transform: translateZ(0);
 }
 
+.wiki-graph-cosmos {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.nebula-cloud,
+.graph-star-field,
+.graph-constellation-art,
+.graph-comets {
+  display: none;
+}
+
+.graph-nebula .nebula-cloud {
+  position: absolute;
+  display: block;
+  width: 58%;
+  height: 56%;
+  border-radius: 48% 52% 63% 37% / 54% 43% 57% 46%;
+  opacity: var(--ambient-intensity, 0.68);
+  filter: blur(34px) saturate(1.5);
+  mix-blend-mode: screen;
+  transform: translateZ(0);
+}
+
+.graph-nebula .nebula-cloud-a {
+  top: -10%;
+  left: -6%;
+  background:
+    radial-gradient(circle at 34% 45%, rgba(41, 226, 204, 0.74), transparent 28%),
+    radial-gradient(circle at 67% 54%, rgba(65, 98, 224, 0.66), transparent 36%),
+    radial-gradient(circle at 50% 28%, rgba(205, 76, 219, 0.42), transparent 42%);
+}
+
+.graph-nebula .nebula-cloud-b {
+  top: 28%;
+  right: -13%;
+  background:
+    radial-gradient(circle at 38% 52%, rgba(137, 73, 226, 0.72), transparent 34%),
+    radial-gradient(circle at 64% 42%, rgba(234, 74, 147, 0.56), transparent 30%),
+    radial-gradient(circle at 46% 70%, rgba(54, 173, 221, 0.52), transparent 38%);
+}
+
+.graph-nebula .nebula-cloud-c {
+  bottom: -22%;
+  left: 23%;
+  background:
+    radial-gradient(circle at 46% 42%, rgba(242, 166, 59, 0.58), transparent 27%),
+    radial-gradient(circle at 62% 62%, rgba(215, 67, 132, 0.45), transparent 34%),
+    radial-gradient(circle at 28% 68%, rgba(48, 177, 174, 0.5), transparent 38%);
+}
+
+.graph-nebula .nebula-cloud-d {
+  top: 13%;
+  left: 31%;
+  width: 42%;
+  height: 68%;
+  background:
+    radial-gradient(ellipse at center, color-mix(in srgb, var(--ambient-accent) 62%, transparent), transparent 44%),
+    radial-gradient(ellipse at 62% 24%, rgba(98, 88, 233, 0.42), transparent 35%);
+  opacity: var(--ambient-intensity, 0.68);
+}
+
+.graph-nebula .graph-star-field,
+.graph-constellations .graph-star-field {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+}
+
+.graph-constellations .graph-constellation-art {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0.7;
+}
+
+.graph-constellation-art polyline {
+  fill: none;
+  stroke: color-mix(in srgb, var(--ambient-accent) 48%, rgba(180, 211, 231, 0.5));
+  stroke-width: 0.18;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 0.5 0.8;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 1.5px rgba(113, 190, 218, 0.62));
+}
+
+.graph-constellation-art circle {
+  fill: #eefaff;
+  stroke: rgba(141, 213, 235, 0.5);
+  stroke-width: 0.08;
+  transform-box: fill-box;
+  transform-origin: center;
+  filter: drop-shadow(0 0 1.2px #8bdaf4);
+}
+
+.ambient-motion.graph-constellations .graph-constellation-art circle {
+  animation: constellation-star-twinkle 3.8s ease-in-out var(--point-delay) infinite alternate;
+}
+
+.ambient-motion.graph-constellations .graph-comets {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+}
+
+.ambient-motion.graph-constellations .graph-comets i {
+  animation: graph-comet-flight var(--comet-duration) linear var(--comet-delay) infinite;
+}
+
 .graph-nebula .wiki-graph {
   background-color: #06090d;
   background-image:
-    radial-gradient(circle at 18% 24%, rgba(255, 255, 255, 0.32) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 72% 62%, rgba(255, 255, 255, 0.22) 0 1px, transparent 1.4px),
     linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
-  background-size: 91px 91px, 137px 137px, 30px 30px, 30px 30px;
+  background-size: 30px 30px, 30px 30px;
 }
 
 .graph-nebula .wiki-graph::before {
   background:
-    radial-gradient(ellipse at 28% 62%, color-mix(in srgb, var(--ambient-accent) 56%, transparent), transparent 34%),
-    radial-gradient(ellipse at 72% 34%, rgba(111, 72, 182, 0.42), transparent 31%),
-    radial-gradient(ellipse at 54% 76%, rgba(223, 160, 67, 0.22), transparent 28%),
-    conic-gradient(from 118deg at 48% 51%, transparent, rgba(75, 147, 159, 0.14), transparent 38%);
-  filter: blur(20px) saturate(1.25);
+    radial-gradient(ellipse at 24% 58%, rgba(33, 190, 181, 0.36), transparent 32%),
+    radial-gradient(ellipse at 72% 34%, rgba(135, 65, 211, 0.35), transparent 31%),
+    radial-gradient(ellipse at 57% 78%, rgba(224, 138, 48, 0.25), transparent 29%),
+    radial-gradient(ellipse at 45% 38%, rgba(202, 64, 146, 0.22), transparent 27%);
+  filter: blur(24px) saturate(1.4);
 }
 
 .graph-constellations .wiki-graph {
   background-color: #050811;
   background-image:
-    radial-gradient(circle, rgba(232, 244, 255, 0.68) 0 1px, transparent 1.6px),
-    radial-gradient(circle, color-mix(in srgb, var(--ambient-accent) 72%, white) 0 1px, transparent 1.8px),
-    repeating-linear-gradient(32deg, transparent 0 86px, rgba(115, 162, 180, 0.1) 87px, transparent 89px);
-  background-size: 74px 74px, 131px 131px, 240px 240px;
-  background-position: 8px 14px, 46px 23px, 0 0;
+    radial-gradient(ellipse at 24% 65%, rgba(49, 71, 128, 0.19), transparent 34%),
+    radial-gradient(ellipse at 78% 24%, color-mix(in srgb, var(--ambient-accent) 16%, transparent), transparent 31%),
+    linear-gradient(145deg, #050711, #07121b 58%, #080612);
 }
 
 .graph-constellations .wiki-graph::before {
@@ -1754,6 +2020,22 @@ p {
   animation: wiki-nebula-breathe 18s ease-in-out infinite alternate;
 }
 
+.ambient-motion.graph-nebula .nebula-cloud-a {
+  animation: nebula-cloud-drift-a 24s ease-in-out infinite alternate;
+}
+
+.ambient-motion.graph-nebula .nebula-cloud-b {
+  animation: nebula-cloud-drift-b 31s ease-in-out -7s infinite alternate;
+}
+
+.ambient-motion.graph-nebula .nebula-cloud-c {
+  animation: nebula-cloud-drift-c 28s ease-in-out -13s infinite alternate;
+}
+
+.ambient-motion.graph-nebula .nebula-cloud-d {
+  animation: nebula-cloud-drift-d 36s ease-in-out -5s infinite alternate;
+}
+
 .graph-nebula .wiki-node.player-node {
   box-shadow: 0 0 0 3px rgba(244, 217, 137, 0.14), 0 0 42px color-mix(in srgb, var(--ambient-accent) 36%, transparent), 0 11px 28px rgba(0, 0, 0, 0.48);
 }
@@ -1763,9 +2045,42 @@ p {
   100% { transform: translate3d(2%, -1.5%, 0) scale(1.08); opacity: var(--ambient-intensity, 0.68); }
 }
 
+@keyframes nebula-cloud-drift-a {
+  to { transform: translate3d(16%, 9%, 0) rotate(7deg) scale(1.16); border-radius: 62% 38% 44% 56% / 42% 61% 39% 58%; }
+}
+
+@keyframes nebula-cloud-drift-b {
+  to { transform: translate3d(-18%, -8%, 0) rotate(-9deg) scale(1.12); border-radius: 39% 61% 57% 43% / 61% 38% 62% 39%; }
+}
+
+@keyframes nebula-cloud-drift-c {
+  to { transform: translate3d(11%, -15%, 0) rotate(12deg) scale(1.2); }
+}
+
+@keyframes nebula-cloud-drift-d {
+  to { transform: translate3d(-13%, 10%, 0) rotate(-8deg) scale(0.92); }
+}
+
+@keyframes constellation-star-twinkle {
+  from { opacity: 0.28; transform: scale(0.72); }
+  to { opacity: 1; transform: scale(1.6); }
+}
+
+@keyframes graph-comet-flight {
+  0%, 70% { opacity: 0; transform: translate3d(-20%, -30%, 0) rotate(-17deg) scale(0.72); }
+  74% { opacity: 0.95; }
+  100% { opacity: 0; transform: translate3d(125vw, 42vh, 0) rotate(-17deg) scale(1); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wiki-app-shell::before,
-  .wiki-graph::before {
+  .wiki-graph::before,
+  .ambient-star-field i,
+  .graph-star-field i,
+  .nebula-cloud,
+  .graph-constellation-art circle,
+  .ambient-comets i,
+  .graph-comets i {
     animation: none !important;
   }
 }
@@ -1794,6 +2109,7 @@ body.wiki-graph-expanded {
 .wiki-graph-world {
   position: absolute;
   inset: 0;
+  z-index: 2;
   transform-origin: 0 0;
   will-change: transform;
 }

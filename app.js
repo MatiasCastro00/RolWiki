@@ -494,6 +494,62 @@ function previewCampaignAppearance(form) {
   if (colorDot) colorDot.style.background = form.elements.appearanceAccent?.value || "#68c3b2";
 }
 
+function ambientSeed(value) {
+  return [...String(value || "rolkeeper")].reduce((seed, character) => ((seed * 31) + character.charCodeAt(0)) >>> 0, 2166136261);
+}
+
+function renderAmbientStars(seedValue, count, className) {
+  const seed = ambientSeed(seedValue);
+  return `<div class="${className}">${Array.from({ length: count }, (_, index) => {
+    const x = (seed + index * 47 + index * index * 17) % 1000 / 10;
+    const y = (seed * 3 + index * 83 + index * index * 11) % 1000 / 10;
+    const size = 0.8 + ((seed + index * 19) % 36) / 10;
+    const delay = -((seed + index * 29) % 120) / 10;
+    const duration = 2.4 + ((seed + index * 13) % 58) / 10;
+    const hue = [42, 52, 188, 205, 224, 278][(seed + index * 7) % 6];
+    return `<i style="--star-x:${x}%;--star-y:${y}%;--star-size:${size}px;--star-delay:${delay}s;--star-duration:${duration}s;--star-hue:${hue}"></i>`;
+  }).join("")}</div>`;
+}
+
+function renderAmbientCosmos(campaign) {
+  const seed = campaign?.id || campaign?.title || "campaign";
+  return `<div class="ambient-cosmos" aria-hidden="true">
+    ${renderAmbientStars(`${seed}:sky`, 78, "ambient-star-field")}
+    <div class="ambient-comets">
+      ${Array.from({ length: 4 }, (_, index) => `<i style="--comet-top:${10 + index * 22}%;--comet-delay:${-index * 6.7}s;--comet-duration:${12 + index * 4}s;--comet-scale:${0.72 + index * 0.14}"></i>`).join("")}
+    </div>
+    <svg class="ambient-map-routes" viewBox="0 0 1000 700" preserveAspectRatio="none">
+      <path class="map-coast" d="M-30 510 C90 420 125 525 230 430 S420 330 505 410 S650 540 760 430 S930 300 1040 355" />
+      <path class="map-route" d="M-20 575 C120 520 155 350 312 382 S520 560 650 430 S850 205 1020 260" />
+      <path class="map-route secondary" d="M95 42 C180 140 330 115 378 230 S430 445 575 478 S765 590 960 535" />
+      <path class="map-route secondary" d="M245 705 C278 580 198 485 310 370 S590 180 720 210 S895 165 1035 42" />
+      <g class="map-waypoints"><circle cx="98" cy="510" r="7" /><circle cx="310" cy="382" r="6" /><circle cx="505" cy="503" r="8" /><circle cx="650" cy="430" r="6" /><circle cx="845" cy="255" r="8" /><circle cx="378" cy="230" r="6" /><circle cx="720" cy="210" r="7" /></g>
+    </svg>
+  </div>`;
+}
+
+function renderWikiGraphCosmos(seedValue) {
+  const constellations = [
+    [[8, 24], [14, 11], [21, 23], [28, 9], [35, 25], [22, 31], [8, 24]],
+    [[59, 15], [67, 8], [74, 17], [82, 12], [89, 25], [78, 29], [70, 24], [62, 34], [59, 15]],
+    [[11, 72], [20, 62], [31, 68], [40, 57], [49, 65], [58, 54], [68, 63], [78, 51], [91, 59]],
+    [[55, 86], [62, 74], [71, 82], [79, 69], [87, 78], [80, 91], [68, 94], [55, 86]],
+  ];
+  return `<div class="wiki-graph-cosmos" aria-hidden="true">
+    <div class="nebula-cloud nebula-cloud-a"></div>
+    <div class="nebula-cloud nebula-cloud-b"></div>
+    <div class="nebula-cloud nebula-cloud-c"></div>
+    <div class="nebula-cloud nebula-cloud-d"></div>
+    ${renderAmbientStars(`${seedValue}:graph`, 64, "graph-star-field")}
+    <svg class="graph-constellation-art" viewBox="0 0 100 100" preserveAspectRatio="none">
+      ${constellations.map((points, shapeIndex) => `<g style="--shape-delay:${-shapeIndex * 1.7}s"><polyline points="${points.map(([x, y]) => `${x},${y}`).join(" ")}" />${points.map(([x, y], pointIndex) => `<circle cx="${x}" cy="${y}" r="${0.28 + (pointIndex % 3) * 0.13}" style="--point-delay:${-(shapeIndex * 1.1 + pointIndex * 0.43)}s" />`).join("")}</g>`).join("")}
+    </svg>
+    <div class="graph-comets">
+      ${Array.from({ length: 3 }, (_, index) => `<i style="--comet-top:${16 + index * 29}%;--comet-delay:${-index * 8.5}s;--comet-duration:${15 + index * 5}s"></i>`).join("")}
+    </div>
+  </div>`;
+}
+
 function formatTags(tags) {
   return tags.length ? tags.join(", ") : "Sin tags";
 }
@@ -1192,6 +1248,7 @@ function renderWikiWorkspace(campaign, role, canManage) {
 
   return `
     <main class="wiki-app-shell ambient-${appearance.pageTheme} graph-${appearance.graphTheme} ${appearance.animated && !appearance.reducedMotion ? "ambient-motion" : ""}" style="${campaignAppearanceStyle(campaign, appearance)}">
+      ${renderAmbientCosmos(campaign)}
       <header class="wiki-commandbar">
         <button class="wiki-world-switch" data-action="go-dashboard" title="Volver al tablero">
           <span class="wiki-world-mark">${escapeHtml(campaign.title.slice(0, 1).toUpperCase())}</span>
@@ -1453,6 +1510,7 @@ function renderWikiGraph(cards, compact = false, canManage = false) {
   const edges = wikiRelations(sorted).filter((edge) => positionById.has(edge.sourceId) && positionById.has(edge.targetId));
   return `
     <div class="wiki-graph ${compact ? "compact" : ""} ${wikiGraphExpanded ? "is-expanded" : ""}" data-wiki-graph data-can-manage="${canManage}" aria-label="Mapa de relaciones de la wiki">
+      ${renderWikiGraphCosmos(activeCampaignId || "wiki")}
       <div class="wiki-graph-world" data-wiki-graph-world>
         <svg class="wiki-graph-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           ${edges.map((edge) => {
