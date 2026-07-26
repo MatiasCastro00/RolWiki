@@ -1485,10 +1485,10 @@ p {
 }
 
 @keyframes ambient-star-twinkle {
-  0%, 18% { opacity: 0.18; transform: scale(0.62); filter: brightness(0.8); }
-  48% { opacity: 0.92; transform: scale(1.08); filter: brightness(1.45); }
-  72% { opacity: 0.4; transform: scale(0.82); filter: brightness(1); }
-  100% { opacity: 1; transform: scale(1.28); filter: brightness(1.7); }
+  0%, 18% { opacity: 0.18; transform: scale(0.62); }
+  48% { opacity: 0.92; transform: scale(1.08); }
+  72% { opacity: 0.4; transform: scale(0.82); }
+  100% { opacity: 1; transform: scale(1.28); }
 }
 
 @keyframes ambient-comet-flight {
@@ -1852,9 +1852,9 @@ p {
   height: 56%;
   border-radius: 48% 52% 63% 37% / 54% 43% 57% 46%;
   opacity: var(--ambient-intensity, 0.68);
-  filter: blur(34px) saturate(1.5);
-  mix-blend-mode: screen;
+  contain: strict;
   transform: translateZ(0);
+  will-change: transform;
 }
 
 .graph-nebula .nebula-cloud-a {
@@ -1921,7 +1921,6 @@ p {
   stroke-linejoin: round;
   stroke-dasharray: 0.5 0.8;
   vector-effect: non-scaling-stroke;
-  filter: drop-shadow(0 0 1.5px rgba(113, 190, 218, 0.62));
 }
 
 .graph-constellation-art circle {
@@ -1930,7 +1929,6 @@ p {
   stroke-width: 0.08;
   transform-box: fill-box;
   transform-origin: center;
-  filter: drop-shadow(0 0 1.2px #8bdaf4);
 }
 
 .ambient-motion.graph-constellations .graph-constellation-art circle {
@@ -1962,7 +1960,6 @@ p {
     radial-gradient(ellipse at 72% 34%, rgba(135, 65, 211, 0.35), transparent 31%),
     radial-gradient(ellipse at 57% 78%, rgba(224, 138, 48, 0.25), transparent 29%),
     radial-gradient(ellipse at 45% 38%, rgba(202, 64, 146, 0.22), transparent 27%);
-  filter: blur(24px) saturate(1.4);
 }
 
 .graph-constellations .wiki-graph {
@@ -2016,10 +2013,6 @@ p {
   background: #080b0d;
 }
 
-.ambient-motion.graph-nebula .wiki-graph::before {
-  animation: wiki-nebula-breathe 18s ease-in-out infinite alternate;
-}
-
 .ambient-motion.graph-nebula .nebula-cloud-a {
   animation: nebula-cloud-drift-a 24s ease-in-out infinite alternate;
 }
@@ -2036,21 +2029,27 @@ p {
   animation: nebula-cloud-drift-d 36s ease-in-out -5s infinite alternate;
 }
 
+.wiki-graph.is-interacting .nebula-cloud,
+.wiki-graph.is-interacting .graph-star-field i,
+.wiki-graph.is-interacting .graph-constellation-art circle,
+.wiki-graph.is-interacting .graph-comets i {
+  animation-play-state: paused !important;
+}
+
+.wiki-graph.is-interacting .graph-star-field i {
+  box-shadow: none;
+}
+
 .graph-nebula .wiki-node.player-node {
   box-shadow: 0 0 0 3px rgba(244, 217, 137, 0.14), 0 0 42px color-mix(in srgb, var(--ambient-accent) 36%, transparent), 0 11px 28px rgba(0, 0, 0, 0.48);
 }
 
-@keyframes wiki-nebula-breathe {
-  0% { transform: translate3d(-1.5%, 1%, 0) scale(1); opacity: var(--ambient-intensity, 0.68); }
-  100% { transform: translate3d(2%, -1.5%, 0) scale(1.08); opacity: var(--ambient-intensity, 0.68); }
-}
-
 @keyframes nebula-cloud-drift-a {
-  to { transform: translate3d(16%, 9%, 0) rotate(7deg) scale(1.16); border-radius: 62% 38% 44% 56% / 42% 61% 39% 58%; }
+  to { transform: translate3d(16%, 9%, 0) rotate(7deg) scale(1.16); }
 }
 
 @keyframes nebula-cloud-drift-b {
-  to { transform: translate3d(-18%, -8%, 0) rotate(-9deg) scale(1.12); border-radius: 39% 61% 57% 43% / 61% 38% 62% 39%; }
+  to { transform: translate3d(-18%, -8%, 0) rotate(-9deg) scale(1.12); }
 }
 
 @keyframes nebula-cloud-drift-c {

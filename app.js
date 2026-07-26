@@ -407,6 +407,7 @@ let wikiGraphExpanded = false;
 let wikiGraphContextMenu = null;
 const wikiGraphNodeMemory = new Map();
 const wikiGraphCameraMemory = new Map();
+const wikiGraphTopologyMemory = new Map();
 let selectedMapId = null;
 let mapSearch = "";
 let mapDrawMode = false;
@@ -540,7 +541,7 @@ function renderWikiGraphCosmos(seedValue) {
     <div class="nebula-cloud nebula-cloud-b"></div>
     <div class="nebula-cloud nebula-cloud-c"></div>
     <div class="nebula-cloud nebula-cloud-d"></div>
-    ${renderAmbientStars(`${seedValue}:graph`, 64, "graph-star-field")}
+    ${renderAmbientStars(`${seedValue}:graph`, 36, "graph-star-field")}
     <svg class="graph-constellation-art" viewBox="0 0 100 100" preserveAspectRatio="none">
       ${constellations.map((points, shapeIndex) => `<g style="--shape-delay:${-shapeIndex * 1.7}s"><polyline points="${points.map(([x, y]) => `${x},${y}`).join(" ")}" />${points.map(([x, y], pointIndex) => `<circle cx="${x}" cy="${y}" r="${0.28 + (pointIndex % 3) * 0.13}" style="--point-delay:${-(shapeIndex * 1.1 + pointIndex * 0.43)}s" />`).join("")}</g>`).join("")}
     </svg>
@@ -1584,11 +1585,15 @@ function initializeWikiGraphs() {
   }
   document.body.classList.toggle("wiki-graph-expanded", wikiGraphExpanded);
 
-  let previousTime = performance.now();
+  let previousStepTime = performance.now();
   const tick = (time) => {
-    const delta = Math.min(2, Math.max(0.35, (time - previousTime) / 16.67));
-    previousTime = time;
-    graphs.forEach((graphState) => stepWikiGraph(graphState, delta, time));
+    if (!document.hidden && time - previousStepTime >= 32) {
+      const delta = Math.min(2, Math.max(0.7, (time - previousStepTime) / 16.67));
+      previousStepTime = time;
+      graphs.forEach((graphState) => {
+        if (!graphState.sleeping && !graphState.dragging) stepWikiGraph(graphState, delta);
+      });
+    }
     wikiGraphRuntime.frame = requestAnimationFrame(tick);
   };
 
@@ -1758,7 +1763,7 @@ function setupWikiGraph(graph) {
       const y = remembered?.y ?? Number(element.dataset.y || 50);
       element.style.left = `${x}%`;
       element.style.top = `${y}%`;
-      return [id, { id, element, index, x, y, vx: 0, vy: 0, dragging: false }];
+      return [id, { id, element, index, x, y, vx: 0, vy: 0, dragging: false, remembered: Boolean(remembered) }];
     })
   );
 
@@ -1770,6 +1775,14 @@ function setupWikiGraph(graph) {
       isCharacterConnection: line.classList.contains("character-connection"),
     }))
     .filter((edge) => nodes.has(edge.sourceId) && nodes.has(edge.targetId));
+  const topologyKey = `${activeCampaignId || "wiki"}:topology`;
+  const topologySignature = edges
+    .map((edge) => [edge.sourceId, edge.targetId].sort().join(":"))
+    .sort()
+    .join("|");
+  const previousTopology = wikiGraphTopologyMemory.get(topologyKey);
+  wikiGraphTopologyMemory.set(topologyKey, topologySignature);
+  const canReuseStableLayout = [...nodes.values()].every((node) => node.remembered) && previousTopology === topologySignature;
 
   const rememberedCamera = wikiGraphCameraMemory.get(wikiGraphCameraKey()) || { x: 0, y: 0, scale: 1 };
   const graphState = {
@@ -1781,6 +1794,9 @@ function setupWikiGraph(graph) {
     panning: null,
     focusedNodeId: null,
     camera: { x: rememberedCamera.x || 0, y: rememberedCamera.y || 0, scale: rememberedCamera.scale || 1 },
+    sleeping: canReuseStableLayout,
+    settledFrames: 0,
+    simulationSteps: 0,
   };
   for (const edge of edges.filter((item) => item.isCharacterConnection)) {
     const sourceNode = nodes.get(edge.sourceId);
@@ -1869,6 +1885,7 @@ function startWikiGraphPan(event, graphState) {
     cameraY: graphState.camera.y,
   };
   graphState.graph.classList.add("panning");
+  graphState.graph.classList.add("is-interacting");
   graphState.graph.setPointerCapture(event.pointerId);
   event.preventDefault();
 
@@ -1877,12 +1894,13 @@ function startWikiGraphPan(event, graphState) {
     graphState.camera.x = Math.max(-900, Math.min(900, graphState.panning.cameraX + moveEvent.clientX - graphState.panning.startX));
     graphState.camera.y = Math.max(-700, Math.min(700, graphState.panning.cameraY + moveEvent.clientY - graphState.panning.startY));
     wikiGraphCameraMemory.set(wikiGraphCameraKey(), { ...graphState.camera });
-    renderWikiGraphFrame(graphState);
+    renderWikiGraphCamera(graphState);
   };
   const stop = (upEvent) => {
     if (upEvent.pointerId !== graphState.panning?.pointerId) return;
     graphState.panning = null;
     graphState.graph.classList.remove("panning");
+    graphState.graph.classList.remove("is-interacting");
     if (graphState.graph.hasPointerCapture(upEvent.pointerId)) graphState.graph.releasePointerCapture(upEvent.pointerId);
     graphState.graph.removeEventListener("pointermove", move);
     graphState.graph.removeEventListener("pointerup", stop);
@@ -1902,13 +1920,16 @@ function zoomWikiGraph(event, graphState) {
   const currentScale = graphState.camera.scale;
   const nextScale = Math.max(0.55, Math.min(2.4, currentScale * (event.deltaY < 0 ? 1.12 : 1 / 1.12)));
   if (nextScale === currentScale) return;
+  graphState.graph.classList.add("is-interacting");
+  window.clearTimeout(graphState.interactionTimer);
+  graphState.interactionTimer = window.setTimeout(() => graphState.graph.classList.remove("is-interacting"), 160);
   const worldX = (cursorX - graphState.camera.x) / currentScale;
   const worldY = (cursorY - graphState.camera.y) / currentScale;
   graphState.camera.x = Math.max(-1400, Math.min(1400, cursorX - worldX * nextScale));
   graphState.camera.y = Math.max(-1100, Math.min(1100, cursorY - worldY * nextScale));
   graphState.camera.scale = nextScale;
   wikiGraphCameraMemory.set(wikiGraphCameraKey(), { ...graphState.camera });
-  renderWikiGraphFrame(graphState);
+  renderWikiGraphCamera(graphState);
 }
 
 function startWikiNodeDrag(event, graphState) {
@@ -1932,6 +1953,8 @@ function startWikiNodeDrag(event, graphState) {
   };
 
   node.dragging = true;
+  graphState.sleeping = true;
+  graphState.graph.classList.add("is-interacting");
   node.vx = 0;
   node.vy = 0;
   nodeElement.classList.add("dragging");
@@ -1967,21 +1990,29 @@ function startWikiNodeDrag(event, graphState) {
     nodeElement.removeEventListener("pointerup", stopWikiNodeDrag);
     nodeElement.removeEventListener("pointercancel", stopWikiNodeDrag);
     graphState.dragging = null;
+    graphState.graph.classList.remove("is-interacting");
+    wakeWikiGraph(graphState);
   }
 }
 
-function stepWikiGraph(graphState, delta, time) {
+function wakeWikiGraph(graphState) {
+  graphState.sleeping = false;
+  graphState.settledFrames = 0;
+  graphState.simulationSteps = 0;
+}
+
+function stepWikiGraph(graphState, delta) {
   const nodes = [...graphState.nodes.values()];
   const centerForce = 0.0028 * delta;
   const linkForce = 0.0019 * delta;
   const repelForce = 0.15 * delta;
+  let maxSpeed = 0;
+  let totalMovement = 0;
 
   for (const node of nodes) {
     if (node.dragging) continue;
     node.vx += (50 - node.x) * centerForce;
     node.vy += (50 - node.y) * centerForce;
-    node.vx += Math.sin(time * 0.0006 + node.index * 1.7) * 0.004 * delta;
-    node.vy += Math.cos(time * 0.0005 + node.index * 1.3) * 0.004 * delta;
   }
 
   for (const edge of graphState.edges) {
@@ -2029,27 +2060,53 @@ function stepWikiGraph(graphState, delta, time) {
     if (node.dragging) continue;
     node.vx *= 0.91;
     node.vy *= 0.91;
+    maxSpeed = Math.max(maxSpeed, Math.abs(node.vx), Math.abs(node.vy));
+    totalMovement += Math.abs(node.vx) + Math.abs(node.vy);
     node.x = clampGraphValue(node.x + node.vx);
     node.y = clampGraphValue(node.y + node.vy);
     wikiGraphNodeMemory.set(wikiGraphNodeKey(node.id), { x: node.x, y: node.y });
   }
 
-  renderWikiGraphFrame(graphState);
+  graphState.simulationSteps += 1;
+  graphState.settledFrames = maxSpeed < 0.012 ? graphState.settledFrames + 1 : 0;
+  if (totalMovement > 0.001) renderWikiGraphFrame(graphState);
+  if (graphState.settledFrames >= 30 || graphState.simulationSteps >= 240) {
+    graphState.sleeping = true;
+    for (const node of nodes) {
+      node.vx = 0;
+      node.vy = 0;
+    }
+  }
+}
+
+function renderWikiGraphCamera(graphState) {
+  graphState.world.style.transform = `translate3d(${graphState.camera.x}px, ${graphState.camera.y}px, 0) scale(${graphState.camera.scale})`;
 }
 
 function renderWikiGraphFrame(graphState) {
-  graphState.world.style.transform = `translate3d(${graphState.camera.x}px, ${graphState.camera.y}px, 0) scale(${graphState.camera.scale})`;
+  renderWikiGraphCamera(graphState);
   for (const node of graphState.nodes.values()) {
-    node.element.style.left = `${node.x}%`;
-    node.element.style.top = `${node.y}%`;
+    const x = node.x.toFixed(3);
+    const y = node.y.toFixed(3);
+    if (node.renderX !== x) {
+      node.element.style.left = `${x}%`;
+      node.renderX = x;
+    }
+    if (node.renderY !== y) {
+      node.element.style.top = `${y}%`;
+      node.renderY = y;
+    }
   }
   for (const edge of graphState.edges) {
     const source = graphState.nodes.get(edge.sourceId);
     const target = graphState.nodes.get(edge.targetId);
-    edge.line.setAttribute("x1", source.x);
-    edge.line.setAttribute("y1", source.y);
-    edge.line.setAttribute("x2", target.x);
-    edge.line.setAttribute("y2", target.y);
+    const coordinates = `${source.renderX}:${source.renderY}:${target.renderX}:${target.renderY}`;
+    if (edge.renderCoordinates === coordinates) continue;
+    edge.renderCoordinates = coordinates;
+    edge.line.setAttribute("x1", source.renderX);
+    edge.line.setAttribute("y1", source.renderY);
+    edge.line.setAttribute("x2", target.renderX);
+    edge.line.setAttribute("y2", target.renderY);
     if (edge.sourceGlow) positionWikiNodeConnectionGlow(edge.sourceGlow, target.x - source.x, target.y - source.y);
     if (edge.targetGlow) positionWikiNodeConnectionGlow(edge.targetGlow, source.x - target.x, source.y - target.y);
   }
