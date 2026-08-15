@@ -431,6 +431,7 @@ const mapViewMemory = new Map();
 let selectedMapTrackCardId = null;
 let selectedMapTimelineEventId = null;
 let mapTimelineCursor = null;
+let mapTimelineEditingUnlocked = false;
 let mapClickChoice = null;
 let mapTimelineDraft = null;
 let pendingWikiImport = null;
@@ -1847,7 +1848,7 @@ function initializeMapRuntime() {
   }, { passive: false });
 
   viewport.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0 || event.target.closest(".map-upload-button, .map-overlay-tools, .map-context-picker, .map-click-choice, .map-point-info, .map-timeline-editor, .map-timeline-event, .map-timeline-panel")) return;
+    if (event.button !== 0 || event.target.closest(".map-upload-button, .map-overlay-tools, .map-context-picker, .map-click-choice, .map-point-info, .map-timeline-editor, .map-timeline-event-info, .map-timeline-panel, .map-timeline-event")) return;
     const pointTrigger = event.target.closest(".map-point-trigger");
     if (pointTrigger) {
       if (viewport.dataset.canManage !== "true") return;
@@ -1859,15 +1860,6 @@ function initializeMapRuntime() {
       return;
     }
     if (event.target.closest(".map-point")) return;
-    if (viewport.dataset.hasSelectedTrack === "true" && viewport.dataset.canManage === "true" && viewport.dataset.canDraw !== "true") {
-      state.gesture = {
-        kind: "map-choice", pointerId: event.pointerId,
-        startX: event.clientX, startY: event.clientY, originX: state.x, originY: state.y, moved: false,
-      };
-      viewport.setPointerCapture(event.pointerId);
-      event.preventDefault();
-      return;
-    }
     const isDrawing = viewport.dataset.canDraw === "true";
     const rect = canvas.getBoundingClientRect();
     const toPoint = (clientX, clientY) => ({
@@ -1904,15 +1896,6 @@ function initializeMapRuntime() {
       event.preventDefault();
       return;
     }
-    if (gesture.kind === "map-choice") {
-      if (Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) > 5) gesture.moved = true;
-      if (gesture.moved) {
-        state.x = gesture.originX + event.clientX - gesture.startX;
-        state.y = gesture.originY + event.clientY - gesture.startY;
-        apply();
-      }
-      return;
-    }
     const rect = canvas.getBoundingClientRect();
     gesture.points.push({ x: ((event.clientX - rect.left) / rect.width) * 100, y: ((event.clientY - rect.top) / rect.height) * 100 });
     drawing.innerHTML = `${drawing.innerHTML.replace(/<polyline class="map-current-stroke"[^>]*\/>/, "")}<polyline class="map-current-stroke" points="${gesture.points.map((point) => `${point.x * 10},${point.y * 10}`).join(" ")}" />`;
@@ -1933,27 +1916,6 @@ function initializeMapRuntime() {
         render();
       }
       return;
-    } else if (gesture.kind === "map-choice") {
-      if (!gesture.moved && selectedMapTrackCardId) {
-        const canvasRect = canvas.getBoundingClientRect();
-        const viewportRect = viewport.getBoundingClientRect();
-        const x = Math.max(0, Math.min(100, ((event.clientX - canvasRect.left) / canvasRect.width) * 100));
-        const y = Math.max(0, Math.min(100, ((event.clientY - canvasRect.top) / canvasRect.height) * 100));
-        mapClickChoice = {
-          mapId: viewport.dataset.mapId,
-          cardId: selectedMapTrackCardId,
-          x,
-          y,
-          left: Math.max(8, Math.min(viewportRect.width - 330, event.clientX - viewportRect.left + 12)),
-          top: Math.max(8, Math.min(viewportRect.height - 190, event.clientY - viewportRect.top + 12)),
-          editorTop: Math.max(8, Math.min(viewportRect.height - 370, event.clientY - viewportRect.top + 12)),
-        };
-        mapTimelineDraft = null;
-        state.gesture = null;
-        if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
-        render();
-        return;
-      }
     } else if (gesture.kind === "draw" && gesture.points.length > 1) {
       const campaign = campaignById(activeCampaignId);
       const map = mapsFor(campaign).find((item) => item.id === viewport.dataset.mapId);
@@ -1968,6 +1930,55 @@ function initializeMapRuntime() {
   };
   viewport.addEventListener("pointerup", finish);
   viewport.addEventListener("pointercancel", finish);
+  initializeMapTimelineHandleRuntime();
+}
+
+function initializeMapTimelineHandleRuntime() {
+  const track = document.querySelector("[data-map-timeline-track]");
+  if (!track) return;
+  let drag = null;
+
+  const finish = (event) => {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const activeDrag = drag;
+    drag = null;
+    if (track.hasPointerCapture(event.pointerId)) track.releasePointerCapture(event.pointerId);
+    if (!activeDrag.moved) {
+      const events = mapTimelineEvents(mapsFor(campaignById(activeCampaignId)).find((item) => item.id === track.dataset.mapId), track.dataset.cardId);
+      const index = events.findIndex((item) => item.id === activeDrag.eventId);
+      if (index >= 0) {
+        selectedMapTimelineEventId = activeDrag.eventId;
+        mapTimelineCursor = index;
+        render();
+      }
+      return;
+    }
+    const rect = track.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const events = mapTimelineEvents(mapsFor(campaignById(activeCampaignId)).find((item) => item.id === track.dataset.mapId), track.dataset.cardId);
+    const targetIndex = events.length <= 1 ? 0 : Math.round(ratio * (events.length - 1));
+    moveMapTimelineEventOrder(track.dataset.mapId, activeDrag.eventId, targetIndex, track.dataset.cardId);
+  };
+
+  track.addEventListener("pointerdown", (event) => {
+    const handle = event.target.closest("[data-map-timeline-handle]");
+    if (!handle || track.dataset.editingUnlocked !== "true") return;
+    drag = { pointerId: event.pointerId, eventId: handle.dataset.eventId, startX: event.clientX, moved: false };
+    track.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+  track.addEventListener("pointermove", (event) => {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (Math.abs(event.clientX - drag.startX) > 4) drag.moved = true;
+    if (!drag.moved) return;
+    const rect = track.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const handle = track.querySelector(`[data-map-timeline-handle][data-event-id="${drag.eventId}"]`);
+    if (handle) handle.style.left = `${ratio * 100}%`;
+    event.preventDefault();
+  });
+  track.addEventListener("pointerup", finish);
+  track.addEventListener("pointercancel", finish);
 }
 
 function setupWikiGraph(graph) {
@@ -3470,7 +3481,7 @@ function renderMapsPage(campaign, role, canManage) {
           ${selected ? `<div class="map-tools"><button class="map-tool" data-action="map-zoom-out" title="Alejar">−</button><button class="map-tool" data-action="map-reset" title="Restablecer vista">⌖</button><button class="map-tool" data-action="map-zoom-in" title="Acercar">+</button>${isPlayer && settings.playersCanDraw ? `<button class="button ${mapDrawMode ? "primary" : ""}" data-action="toggle-map-draw">✎ ${mapDrawMode ? "Dibujando" : "Dibujar"}</button>` : ""}</div>` : ""}
         </header>
         ${main}
-        ${selected ? `<footer class="map-status">${canManage && selectedMapTrackCardId ? "Hacé click en el mapa para crear una tarjeta o un hito de la ficha seleccionada. Arrastrá para mover." : canManage ? "Seleccioná una ficha de la izquierda o usá click derecho para vincular cualquier tarjeta." : isPlayer && settings.playersCanDraw ? `Podés navegar y ${mapDrawMode ? "dibujar" : "activar Dibujo"}; los trazos se borran en ${settings.strokeDuration}s.` : "Seleccioná una ficha para recorrer su historia en el mapa."}</footer>` : ""}
+        ${selected ? `<footer class="map-status">${canManage && selectedMapTrackCardId ? "Hacé click derecho en el mapa para crear una tarjeta o un hito de la ficha seleccionada." : canManage ? "Seleccioná una ficha de la izquierda o usá click derecho para vincular cualquier tarjeta." : isPlayer && settings.playersCanDraw ? `Podés navegar y ${mapDrawMode ? "dibujar" : "activar Dibujo"}; los trazos se borran en ${settings.strokeDuration}s.` : "Seleccioná una ficha para recorrer su historia en el mapa."}</footer>` : ""}
       </section>
     </section>
   `;
@@ -3513,7 +3524,7 @@ function renderMapStage(campaign, map, canManage, isPlayer, settings) {
       ${mapElementsHidden ? "" : points.map((point) => renderMapPoint(campaign, map, point)).join("")}
       ${mapElementsHidden ? "" : renderMapTimelineMarkers(campaign, map, timelineEvents, timelineCursor, canManage)}
     </div></div>
-    <div class="map-hint">${canManage && selectedMapTrackCardId ? "Click: tarjeta o hito · Arrastre: mover" : "Arrastrá para mover · Rueda para zoom"}</div>
+    <div class="map-hint">${canManage && selectedMapTrackCardId ? "Click derecho: tarjeta o hito" : "Arrastrá para mover · Rueda para zoom"}</div>
   </div>`;
 }
 
@@ -3548,8 +3559,8 @@ function renderMapTimelineMarkers(campaign, map, events, cursor, canManage) {
   const markers = events.map((event, index) => {
     const type = mapTimelineType(event.type);
     const selected = selectedMapTimelineEventId === event.id;
-    return `<div class="map-timeline-event ${selected ? "selected" : ""}" data-map-timeline-event data-event-step="${index}" data-event-x="${Number(event.x)}" data-event-y="${Number(event.y)}" style="left:${Number(event.x)}%;top:${Number(event.y)}%;--event-color:${type.color}" ${index > cursor ? "hidden" : ""}>
-      <button data-action="select-map-timeline-event" data-id="${event.id}" title="${escapeAttr(`${type.label}: ${event.placeName || card?.title || "Hito"}`)}"><span>${type.icon}</span><b>${index + 1}</b></button>
+    return `<div class="map-timeline-event ${selected ? "selected" : ""}" data-map-timeline-event data-event-id="${event.id}" data-event-step="${index}" data-event-x="${Number(event.x)}" data-event-y="${Number(event.y)}" style="left:${Number(event.x)}%;top:${Number(event.y)}%;--event-color:${type.color}" ${index > cursor ? "hidden" : ""}>
+      <button data-action="select-map-timeline-event" data-id="${event.id}" title="${escapeAttr(`${type.label}: ${event.placeName || card?.title || "Hito"}.`)}"><span>${type.icon}</span><b>${index + 1}</b></button>
       ${selected ? renderMapTimelineEventInfo(event, type, canManage, index) : ""}
     </div>`;
   }).join("");
@@ -3584,14 +3595,17 @@ function renderMapTimelinePanel(campaign, map, canManage) {
   const card = wikiCardsFor(campaign).find((item) => item.id === selectedMapTrackCardId);
   if (!card) return `<section class="map-timeline-panel empty"><div><span>LÍNEA DE TIEMPO</span><strong>Elegí una ficha de la izquierda</strong><small>Vas a ver dónde estuvo y el camino que recorrió.</small></div></section>`;
   const events = mapTimelineEvents(map, card.id);
-  if (!events.length) return `<section class="map-timeline-panel empty"><div>${renderWikiThumb(card)}<span>LÍNEA DE TIEMPO</span><strong>${escapeHtml(card.title)} todavía no tiene recorrido</strong><small>${canManage ? "Hacé click en el mapa y elegí Hito para comenzar su historia." : "Cuando se agreguen hitos, el recorrido aparecerá acá."}</small></div></section>`;
+  if (!events.length) return `<section class="map-timeline-panel empty"><div>${renderWikiThumb(card)}<span>LÍNEA DE TIEMPO</span><strong>${escapeHtml(card.title)} todavía no tiene recorrido</strong><small>${canManage ? "Hacé click derecho en el mapa y elegí Hito para comenzar su historia." : "Cuando se agreguen hitos, el recorrido aparecerá acá."}</small></div></section>`;
   const cursor = mapTimelineCursorFor(events);
   const reached = events.filter((event, index) => index <= cursor).length;
   return `<section class="map-timeline-panel" data-map-timeline-panel>
-    <header><div>${renderWikiThumb(card)}<span><small>LÍNEA DE TIEMPO</small><strong>${escapeHtml(card.title)}</strong></span></div><button data-action="set-map-timeline-now">Actualidad</button></header>
+    <header><div>${renderWikiThumb(card)}<span><small>LÍNEA DE TIEMPO</small><strong>${escapeHtml(card.title)}</strong></span></div><div class="map-timeline-panel-actions">${canManage ? `<button class="map-timeline-lock ${mapTimelineEditingUnlocked ? "unlocked" : ""}" data-action="toggle-map-timeline-lock" aria-pressed="${mapTimelineEditingUnlocked}" title="${mapTimelineEditingUnlocked ? "Bloquear posición de hitos" : "Desbloquear para mover hitos"}">${mapTimelineEditingUnlocked ? "🔓 Mover hitos" : "🔒 Hitos bloqueados"}</button>` : ""}<button data-action="set-map-timeline-now">Actualidad</button></div></header>
     <div class="map-timeline-scrubber">
       <span>${escapeHtml(mapTimelineMomentLabel(events[0], 0))}</span>
-      <input data-map-timeline-range type="range" min="0" max="${events.length}" step="0.01" value="${cursor}" aria-label="Momento del recorrido" />
+      <div class="map-timeline-track" data-map-timeline-track data-map-id="${map.id}" data-card-id="${card.id}" data-editing-unlocked="${mapTimelineEditingUnlocked}">
+        <input data-map-timeline-range type="range" min="0" max="${events.length}" step="0.01" value="${cursor}" aria-label="Momento del recorrido" />
+        <div class="map-timeline-handles">${events.map((event, index) => { const type = mapTimelineType(event.type); const position = events.length <= 1 ? 0 : (index / (events.length - 1)) * 100; return `<button class="map-timeline-handle ${mapTimelineEditingUnlocked ? "unlocked" : ""}" data-map-timeline-handle data-action="jump-map-timeline-event" data-id="${event.id}" data-event-id="${event.id}" style="left:${position}%;--event-color:${type.color}" title="${escapeAttr(`${mapTimelineMomentLabel(event, index)}${mapTimelineEditingUnlocked ? ". Arrastrá para reordenar." : ". Desbloqueá los hitos para reordenar."}`)}"><span>${type.icon}</span></button>`; }).join("")}</div>
+      </div>
       <span>Actualidad</span>
     </div>
     <div class="map-timeline-readout"><strong data-map-timeline-date>${escapeHtml(mapTimelineReadout(events, cursor))}</strong><small data-map-timeline-count>${reached} de ${events.length} hitos visibles</small></div>
@@ -4947,6 +4961,7 @@ document.addEventListener("click", async (event) => {
     selectedMapTrackCardId = null;
     selectedMapTimelineEventId = null;
     mapTimelineCursor = null;
+    mapTimelineEditingUnlocked = false;
     mapClickChoice = null;
     mapTimelineDraft = null;
     setCampaignRoute();
@@ -4957,6 +4972,7 @@ document.addEventListener("click", async (event) => {
     selectedMapTimelineEventId = null;
     selectedMapPointId = null;
     mapTimelineCursor = null;
+    mapTimelineEditingUnlocked = false;
     mapClickChoice = null;
     mapTimelineDraft = null;
     render();
@@ -5007,6 +5023,13 @@ document.addEventListener("click", async (event) => {
   if (action === "set-map-timeline-now") {
     mapTimelineCursor = null;
     selectedMapTimelineEventId = null;
+    render();
+  }
+
+  if (action === "toggle-map-timeline-lock") {
+    const campaign = campaignById(activeCampaignId);
+    if (!campaign || !canManageCampaign(campaign, currentUser().id)) return;
+    mapTimelineEditingUnlocked = !mapTimelineEditingUnlocked;
     render();
   }
 
@@ -5414,15 +5437,27 @@ document.addEventListener("contextmenu", (event) => {
   const viewportRect = viewport.getBoundingClientRect();
   const x = ((event.clientX - rect.left) / rect.width) * 100;
   const y = ((event.clientY - rect.top) / rect.height) * 100;
-  mapPointPicker = {
-    mapId: viewport.dataset.mapId,
-    x: Math.max(0, Math.min(100, x)),
-    y: Math.max(0, Math.min(100, y)),
-    left: Math.max(8, Math.min(viewportRect.width - 300, event.clientX - viewportRect.left + 10)),
-    top: Math.max(8, Math.min(viewportRect.height - 360, event.clientY - viewportRect.top + 10)),
-  };
+  const point = { x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)) };
+  if (selectedMapTrackCardId) {
+    mapClickChoice = {
+      mapId: viewport.dataset.mapId,
+      cardId: selectedMapTrackCardId,
+      ...point,
+      left: Math.max(8, Math.min(viewportRect.width - 330, event.clientX - viewportRect.left + 12)),
+      top: Math.max(8, Math.min(viewportRect.height - 190, event.clientY - viewportRect.top + 12)),
+      editorTop: Math.max(8, Math.min(viewportRect.height - 370, event.clientY - viewportRect.top + 12)),
+    };
+    mapPointPicker = null;
+  } else {
+    mapPointPicker = {
+      mapId: viewport.dataset.mapId,
+      ...point,
+      left: Math.max(8, Math.min(viewportRect.width - 300, event.clientX - viewportRect.left + 10)),
+      top: Math.max(8, Math.min(viewportRect.height - 360, event.clientY - viewportRect.top + 10)),
+    };
+    mapClickChoice = null;
+  }
   selectedMapPointId = null;
-  mapClickChoice = null;
   render();
 });
 
@@ -6416,6 +6451,24 @@ function moveMapPoint(mapId, pointId, x, y) {
   point.y = Math.max(0, Math.min(100, Number(y)));
   saveState();
   render();
+}
+
+function moveMapTimelineEventOrder(mapId, eventId, targetIndex, cardId = selectedMapTrackCardId) {
+  const campaign = campaignById(activeCampaignId);
+  const map = mapsFor(campaign).find((item) => item.id === mapId);
+  if (!campaign || !map || !mapTimelineEditingUnlocked || !canManageCampaign(campaign, currentUser().id)) return;
+  const events = mapTimelineEvents(map, cardId);
+  const currentIndex = events.findIndex((item) => item.id === eventId);
+  if (currentIndex < 0) return;
+  const destination = Math.max(0, Math.min(events.length - 1, Math.round(Number(targetIndex))));
+  const [timelineEvent] = events.splice(currentIndex, 1);
+  events.splice(destination, 0, timelineEvent);
+  events.forEach((event, index) => { event.order = index; });
+  selectedMapTimelineEventId = eventId;
+  mapTimelineCursor = destination;
+  saveState();
+  render();
+  showToast("Posición del hito actualizada.");
 }
 
 function saveMapTimelineEvent(data) {
