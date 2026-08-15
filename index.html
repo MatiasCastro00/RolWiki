@@ -4,12 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Rolkeeper - Campanas de rol</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link rel="preconnect" href="https://jmgzdrkuomdmifrrrmlt.supabase.co" crossorigin />
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
+    <link rel="dns-prefetch" href="https://jmgzdrkuomdmifrrrmlt.supabase.co" />
+    <link rel="preload" href="app.js" as="script" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app" aria-busy="true">
+      <main class="boot-screen" aria-live="polite">
+        <div class="boot-mark" aria-hidden="true">R</div>
+        <div class="boot-copy">
+          <strong>Preparando Rolkeeper</strong>
+          <span>Cargando tu mesa y tus campanas...</span>
+        </div>
+        <span class="boot-spinner" aria-hidden="true"></span>
+      </main>
+    </div>
     <!-- Incrementar esta versión con cada cambio publicado. -->
-    <div class="app-version" aria-label="Versión de la aplicación">v0.1.0</div>
+    <div class="app-version" aria-label="Versión de la aplicación">v0.1.1</div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js"></script>
     <script src="app.js"></script>

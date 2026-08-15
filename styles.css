@@ -42,6 +42,65 @@ body {
   font-family: var(--sans);
 }
 
+.boot-screen {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  width: min(460px, calc(100% - 36px));
+  min-height: 100vh;
+  margin: 0 auto;
+}
+
+.boot-mark {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid rgba(216, 166, 87, 0.5);
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(216, 166, 87, 0.18), rgba(125, 191, 141, 0.12));
+  color: var(--gold-strong);
+  font-family: var(--serif);
+  font-size: 24px;
+}
+
+.boot-copy {
+  display: grid;
+  gap: 5px;
+}
+
+.boot-copy strong {
+  font-size: 16px;
+  letter-spacing: 0.01em;
+}
+
+.boot-copy span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.boot-spinner,
+.button-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--gold-strong);
+  border-radius: 50%;
+  animation: loading-spin 700ms linear infinite;
+}
+
+.button-spinner {
+  width: 14px;
+  height: 14px;
+  border-color: rgba(18, 12, 5, 0.25);
+  border-top-color: #120c05;
+}
+
+@keyframes loading-spin {
+  to { transform: rotate(360deg); }
+}
+
 button,
 input,
 textarea,
@@ -449,6 +508,12 @@ p {
   transform: translateY(-1px);
   border-color: var(--line-strong);
   background: rgba(255, 255, 255, 0.09);
+}
+
+.button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+  transform: none;
 }
 
 .button.primary {
@@ -2079,7 +2144,9 @@ p {
   .nebula-cloud,
   .graph-constellation-art circle,
   .ambient-comets i,
-  .graph-comets i {
+  .graph-comets i,
+  .boot-spinner,
+  .button-spinner {
     animation: none !important;
   }
 }

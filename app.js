@@ -1,5 +1,7 @@
 const LAST_EMAIL_KEY = "rolkeeper-last-email";
 const SUPABASE_TABLE_ID = "main";
+const STATE_CACHE_DB = "rolkeeper-state-cache";
+const STATE_CACHE_STORE = "sessions";
 
 const app = document.querySelector("#app");
 const supabaseConfig = window.ROLKEEPER_SUPABASE || {};
@@ -729,26 +731,66 @@ function inviteSuggestionsFor(campaign) {
 }
 
 async function boot() {
+  renderLoading("Comprobando tu sesión...");
+  let renderedFromCache = false;
   try {
     if (!db) {
       renderSupabaseRequired();
       return;
     }
-    await loadRemoteState();
+
+    const { data, error } = await db.auth.getSession();
+    if (error) throw error;
+    if (data.session) {
+      const cachedState = await readCachedState(data.session.user.id);
+      if (cachedState) {
+        applyRemoteState({ ...cachedState, currentUserId: data.session.user.id });
+        activeCampaignId = firstCampaignForCurrentUser()?.id || state.campaigns[0]?.id || null;
+        render();
+        renderedFromCache = true;
+      } else {
+        renderLoading("Cargando tus campañas...");
+      }
+    }
+
+    await loadRemoteState({ session: data.session });
     activeCampaignId = firstCampaignForCurrentUser()?.id || state.campaigns[0]?.id || null;
     render();
-  } catch {
-    renderSupabaseRequired();
+  } catch (error) {
+    console.error("No se pudo iniciar Rolkeeper", error);
+    const sessionRejected = [401, 403].includes(Number(error?.status));
+    if (renderedFromCache && sessionRejected) {
+      const userId = state.currentUserId;
+      deleteCachedState(userId);
+      db.auth.signOut().catch(() => {});
+      applyRemoteState({ users: [], campaigns: [], currentUserId: null });
+      render();
+      showToast("Tu sesión venció. Volvé a ingresar.");
+    } else if (renderedFromCache) {
+      showToast("Mostrando la última copia guardada. No se pudo actualizar.");
+    } else {
+      renderLoadError();
+    }
   }
 }
 
-async function loadRemoteState() {
-  await ensureCurrentProfile();
-  const { data: sessionData } = await db.auth.getSession();
-  const userQuery = sessionData.session
+async function loadRemoteState(options = {}) {
+  let session = options.session;
+  if (!Object.hasOwn(options, "session")) {
+    const { data, error } = await db.auth.getSession();
+    if (error) throw error;
+    session = data.session;
+  }
+
+  if (!session) {
+    applyRemoteState({ users: [], campaigns: [], currentUserId: null });
+    return;
+  }
+
+  const userQuery = session
     ? db.from("profiles").select("id, name, email, created_at").order("created_at", { ascending: true })
     : Promise.resolve({ data: [], error: null });
-  const stateQuery = sessionData.session
+  const stateQuery = session
     ? db.from("app_state").select("campaigns").eq("id", SUPABASE_TABLE_ID).maybeSingle()
     : Promise.resolve({ data: { campaigns: [] }, error: null });
   const [usersResult, stateResult] = await Promise.all([
@@ -756,28 +798,97 @@ async function loadRemoteState() {
     stateQuery,
   ]);
 
-  if (usersResult.error) throw usersResult.error;
   if (stateResult.error) throw stateResult.error;
 
+  if (usersResult.error) {
+    console.warn("No se pudieron cargar todos los perfiles", usersResult.error);
+  }
+
   const campaigns = Array.isArray(stateResult.data?.campaigns) ? stateResult.data.campaigns : [];
+  const users = Array.isArray(usersResult.data) ? usersResult.data.map(profileFromRow) : [];
+  const currentProfile = profileFromAuthUser(session.user);
+  const profileMissing = !users.some((profile) => profile.id === currentProfile.id);
+  if (profileMissing) users.push(currentProfile);
+
   applyRemoteState({
-    users: usersResult.data.map(profileFromRow),
+    users,
     campaigns,
-    currentUserId: sessionData.session?.user?.id || null,
+    currentUserId: session.user.id,
+  });
+  queueStateCache(session.user.id, { users, campaigns });
+
+  if (profileMissing) {
+    upsertProfile(currentProfile.id, currentProfile.name, currentProfile.email).catch((error) => {
+      console.warn("No se pudo crear el perfil de la sesión", error);
+    });
+  }
+}
+
+function openStateCache() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) {
+      resolve(null);
+      return;
+    }
+    const request = window.indexedDB.open(STATE_CACHE_DB, 1);
+    request.addEventListener("upgradeneeded", () => {
+      if (!request.result.objectStoreNames.contains(STATE_CACHE_STORE)) {
+        request.result.createObjectStore(STATE_CACHE_STORE);
+      }
+    });
+    request.addEventListener("success", () => resolve(request.result));
+    request.addEventListener("error", () => reject(request.error));
   });
 }
 
-async function ensureCurrentProfile() {
-  const { data } = await db.auth.getUser();
-  const user = data.user;
-  if (!user) return;
+async function readCachedState(userId) {
+  try {
+    const cache = await openStateCache();
+    if (!cache) return null;
+    return await new Promise((resolve, reject) => {
+      const transaction = cache.transaction(STATE_CACHE_STORE, "readonly");
+      const request = transaction.objectStore(STATE_CACHE_STORE).get(userId);
+      request.addEventListener("success", () => resolve(request.result?.payload || null));
+      request.addEventListener("error", () => reject(request.error));
+      transaction.addEventListener("complete", () => cache.close());
+    });
+  } catch (error) {
+    console.warn("No se pudo leer la copia local", error);
+    return null;
+  }
+}
 
-  const { data: profile, error } = await db.from("profiles").select("id").eq("id", user.id).maybeSingle();
-  if (error) throw error;
-  if (profile) return;
+function queueStateCache(userId, payload) {
+  const write = async () => {
+    try {
+      const cache = await openStateCache();
+      if (!cache) return;
+      const transaction = cache.transaction(STATE_CACHE_STORE, "readwrite");
+      transaction.objectStore(STATE_CACHE_STORE).put({ payload, savedAt: Date.now() }, userId);
+      transaction.addEventListener("complete", () => cache.close());
+    } catch (error) {
+      console.warn("No se pudo actualizar la copia local", error);
+    }
+  };
 
-  const name = user.user_metadata?.name || user.email?.split("@")[0] || "Usuario";
-  await upsertProfile(user.id, name, user.email);
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(write, { timeout: 1800 });
+  } else {
+    window.setTimeout(write, 0);
+  }
+}
+
+async function deleteCachedState(userId) {
+  if (!userId) return;
+  try {
+    const cache = await openStateCache();
+    if (!cache) return;
+    const transaction = cache.transaction(STATE_CACHE_STORE, "readwrite");
+    transaction.objectStore(STATE_CACHE_STORE).delete(userId);
+    transaction.addEventListener("complete", () => cache.close());
+  } catch (error) {
+    console.warn("No se pudo limpiar la copia local", error);
+  }
 }
 
 function applyRemoteState(payload) {
@@ -804,13 +915,15 @@ function saveState() {
 }
 
 async function persistState() {
-  if (!db || !currentUser()) return;
+  const user = currentUser();
+  if (!db || !user) return;
   try {
     const { error } = await db
       .from("app_state")
       .upsert({ id: SUPABASE_TABLE_ID, campaigns: state.campaigns, updated_at: new Date().toISOString() });
 
     if (error) throw error;
+    queueStateCache(user.id, { users: state.users, campaigns: state.campaigns });
   } catch (error) {
     showToast("No se pudo guardar en la base de datos.");
   }
@@ -825,7 +938,44 @@ function profileFromRow(row) {
   };
 }
 
+function profileFromAuthUser(user) {
+  return {
+    id: user.id,
+    name: user.user_metadata?.name || user.email?.split("@")[0] || "Usuario",
+    email: user.email || "",
+    createdAt: user.created_at ? new Date(user.created_at).getTime() : Date.now(),
+  };
+}
+
+function renderLoading(message = "Cargando tus campañas...") {
+  app.setAttribute("aria-busy", "true");
+  app.innerHTML = `
+    <main class="boot-screen" aria-live="polite">
+      <div class="boot-mark" aria-hidden="true">R</div>
+      <div class="boot-copy">
+        <strong>Preparando Rolkeeper</strong>
+        <span>${escapeHtml(message)}</span>
+      </div>
+      <span class="boot-spinner" aria-hidden="true"></span>
+    </main>
+  `;
+}
+
+function renderLoadError() {
+  app.setAttribute("aria-busy", "false");
+  app.innerHTML = `
+    <main class="auth-layout single">
+      <section class="panel auth-card">
+        <h2>No pudimos cargar tus campañas</h2>
+        <p class="muted small">La conexión con Supabase tardó demasiado o respondió con un error temporal.</p>
+        <button class="button primary" type="button" data-action="retry-load">Reintentar</button>
+      </section>
+    </main>
+  `;
+}
+
 function renderSupabaseRequired() {
+  app.setAttribute("aria-busy", "false");
   app.innerHTML = `
     <main class="auth-layout single">
       <section class="panel auth-card">
@@ -919,6 +1069,7 @@ function setHash(params) {
 }
 
 function render() {
+  app.setAttribute("aria-busy", "false");
   teardownWikiGraphs();
   teardownMapRuntime();
   const route = getRoute();
@@ -1109,6 +1260,23 @@ function renderRegisterForm(formType, buttonText, attributes = "") {
       <button class="button primary" type="submit"><span class="icon">+</span>${buttonText}</button>
     </form>
   `;
+}
+
+function setFormSubmitting(form, label) {
+  const button = form.querySelector('button[type="submit"]');
+  if (!button) return () => {};
+
+  const originalContent = button.innerHTML;
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  button.innerHTML = `<span class="button-spinner" aria-hidden="true"></span>${escapeHtml(label)}`;
+
+  return () => {
+    if (!button.isConnected) return;
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+    button.innerHTML = originalContent;
+  };
 }
 
 function renderSocialAuth() {
@@ -4239,17 +4407,27 @@ document.addEventListener("submit", async (event) => {
   const formType = form.dataset.form;
 
   if (formType === "login") {
-    if (await loginUser(data.email, data.password)) {
-      render();
-      showToast("Sesion iniciada.");
+    const restoreButton = setFormSubmitting(form, "Entrando...");
+    try {
+      if (await loginUser(data.email, data.password)) {
+        render();
+        showToast("Sesion iniciada.");
+      }
+    } finally {
+      restoreButton();
     }
     return;
   }
 
   if (formType === "register") {
-    if (await registerUser(data.name, data.email, data.password, data.confirmPassword)) {
-      render();
-      showToast("Cuenta creada.");
+    const restoreButton = setFormSubmitting(form, "Creando cuenta...");
+    try {
+      if (await registerUser(data.name, data.email, data.password, data.confirmPassword)) {
+        render();
+        showToast("Cuenta creada.");
+      }
+    } finally {
+      restoreButton();
     }
     return;
   }
@@ -4356,6 +4534,11 @@ document.addEventListener("click", async (event) => {
   const action = target.dataset.action;
   const id = target.dataset.id;
 
+  if (action === "retry-load") {
+    await boot();
+    return;
+  }
+
   if (action === "go-dashboard") {
     editing = null;
     activeTab = "wiki";
@@ -4364,12 +4547,14 @@ document.addEventListener("click", async (event) => {
   }
 
   if (action === "logout") {
+    const userId = state.currentUserId;
     try {
       await db.auth.signOut();
     } catch {
       // The local token is cleared even if the session was already gone.
     }
     state.currentUserId = null;
+    deleteCachedState(userId);
     window.location.hash = "";
     authMode = "login";
     render();
@@ -5110,12 +5295,12 @@ window.addEventListener("hashchange", render);
 
 async function loginUser(email, password) {
   try {
-    const { error } = await db.auth.signInWithPassword({
+    const { data, error } = await db.auth.signInWithPassword({
       email: normalizeEmail(email),
       password,
     });
     if (error) throw error;
-    await loadRemoteState();
+    await loadRemoteState({ session: data.session });
     activeCampaignId = firstCampaignForCurrentUser()?.id || null;
     activeTab = "wiki";
     return true;
@@ -5170,7 +5355,7 @@ async function registerUser(name, email, password, confirmPassword) {
     }
 
     await upsertProfile(data.user.id, cleanName, cleanEmail);
-    await loadRemoteState();
+    await loadRemoteState({ session: data.session });
     activeCampaignId = firstCampaignForCurrentUser()?.id || null;
     activeTab = "wiki";
     return true;
@@ -5283,6 +5468,10 @@ async function campaignImageFromData(data) {
       showToast("Elegi un archivo de imagen.");
       return null;
     }
+    if (file.size > 4 * 1024 * 1024) {
+      showToast("La imagen debe pesar menos de 4 MB.");
+      return null;
+    }
     try {
       return await readFileAsDataUrl(file);
     } catch {
@@ -5294,13 +5483,59 @@ async function campaignImageFromData(data) {
   return String(data.imageUrl || data.existingImageUrl || "").trim();
 }
 
-function readFileAsDataUrl(file) {
+function blobAsDataUrl(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.addEventListener("load", () => resolve(String(reader.result || "")));
     reader.addEventListener("error", () => reject(reader.error));
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(blob);
   });
+}
+
+function canvasAsBlob(canvas, type, quality) {
+  return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+}
+
+async function readFileAsDataUrl(file) {
+  const canOptimize = file.type.startsWith("image/")
+    && !["image/svg+xml", "image/gif"].includes(file.type)
+    && file.size > 280 * 1024
+    && typeof createImageBitmap === "function";
+
+  if (!canOptimize) return blobAsDataUrl(file);
+
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+    const maxDimension = 1920;
+    const sourceMaxDimension = Math.max(bitmap.width, bitmap.height);
+    let scale = Math.min(1, maxDimension / Math.max(sourceMaxDimension, 1));
+    let quality = 0.84;
+    let optimizedBlob = null;
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      const context = canvas.getContext("2d", { alpha: true });
+      if (!context) break;
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      optimizedBlob = await canvasAsBlob(canvas, "image/webp", quality);
+      if (!optimizedBlob || optimizedBlob.size <= 700 * 1024) break;
+      quality = Math.max(0.66, quality - 0.06);
+      scale *= 0.88;
+    }
+
+    if (optimizedBlob && optimizedBlob.size < file.size) {
+      return blobAsDataUrl(optimizedBlob);
+    }
+  } catch (error) {
+    console.warn("No se pudo optimizar una imagen; se guardará el archivo original", error);
+  } finally {
+    bitmap?.close?.();
+  }
+
+  return blobAsDataUrl(file);
 }
 
 async function wikiImageFromData(data) {
