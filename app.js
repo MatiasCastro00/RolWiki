@@ -3404,24 +3404,56 @@ function mapDisplayEnabled(display, group, id) {
   return display?.[group]?.[id] !== false;
 }
 
+function mapTimelineMonthSerial(value) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(value || "").trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (!Number.isInteger(year) || month < 1 || month > 12) return null;
+  return year * 12 + month - 1;
+}
+
+function mapTimelineMonthValue(serial) {
+  const value = Math.round(Number(serial));
+  const year = Math.floor(value / 12);
+  const month = value - year * 12 + 1;
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
+}
+
+function currentMapTimelineMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function mapTimelineFormattedMonth(value) {
+  const serial = mapTimelineMonthSerial(value);
+  if (serial === null) return "Fecha sin definir";
+  const year = Math.floor(serial / 12);
+  const month = serial - year * 12;
+  return new Intl.DateTimeFormat("es-AR", { month: "long", year: "numeric", timeZone: "UTC" })
+    .format(new Date(Date.UTC(year, month, 1)))
+    .replace(/^./, (letter) => letter.toUpperCase());
+}
+
 function mapTimelineEventOrder(event) {
+  const month = mapTimelineMonthSerial(event?.occurredAt);
+  if (month !== null) return month;
   if (Number.isFinite(Number(event?.timelinePosition))) return Number(event.timelinePosition);
   if (Number.isFinite(Number(event?.order))) return Number(event.order);
-  const legacyDate = Date.parse(event?.occurredAt || "");
-  return Number.isFinite(legacyDate) ? legacyDate : Number(event?.createdAt || 0);
+  return Number(event?.createdAt || 0);
 }
 
 function mapTimelinePosition(event, index = 0) {
-  if (Number.isFinite(Number(event?.timelinePosition))) return Number(event.timelinePosition);
-  if (Number.isFinite(Number(event?.order))) return Number(event.order) * 100;
-  return index * 100;
+  const month = mapTimelineMonthSerial(event?.occurredAt);
+  if (month !== null) return month;
+  return mapTimelineMonthSerial(currentMapTimelineMonth()) + index;
 }
 
 function mapTimelineLayout(events) {
   const positions = events.map((event, index) => mapTimelinePosition(event, index));
-  const minimum = Math.min(0, ...positions);
-  const highest = Math.max(0, ...positions);
-  const padding = Math.max(100, (highest - minimum || 100) * 0.2);
+  const minimum = positions.length ? Math.min(...positions) : mapTimelineMonthSerial(currentMapTimelineMonth());
+  const highest = positions.length ? Math.max(...positions) : minimum;
+  const padding = Math.max(1, Math.ceil((highest - minimum) * 0.2));
   const maximum = highest + padding;
   return {
     minimum,
@@ -3433,11 +3465,7 @@ function mapTimelineLayout(events) {
 }
 
 function mapTimelineMoveLabel(events, eventId, position) {
-  const otherEvents = events.filter((event) => event.id !== eventId);
-  const nextIndex = otherEvents.findIndex((event, index) => mapTimelinePosition(event, index) >= position);
-  if (nextIndex === 0) return `Nueva fecha narrativa: antes de ${mapTimelineMomentLabel(otherEvents[0], 0)}`;
-  if (nextIndex < 0) return otherEvents.length ? `Nueva fecha narrativa: después de ${mapTimelineMomentLabel(otherEvents[otherEvents.length - 1], otherEvents.length - 1)}` : "Nueva fecha narrativa: inicio de la historia";
-  return `Nueva fecha narrativa: entre ${mapTimelineMomentLabel(otherEvents[nextIndex - 1], nextIndex - 1)} y ${mapTimelineMomentLabel(otherEvents[nextIndex], nextIndex)}`;
+  return `Fecha: ${mapTimelineFormattedMonth(mapTimelineMonthValue(position))}`;
 }
 
 function openMapTimelineContextMenu(mapId, eventId, clientX, clientY) {
@@ -3452,7 +3480,32 @@ function openMapTimelineContextMenu(mapId, eventId, clientX, clientY) {
   render();
 }
 
+function ensureMapTimelineEventMonths(map, cardId) {
+  const events = (Array.isArray(map?.timelineEvents) ? map.timelineEvents : [])
+    .filter((event) => !cardId || event.cardId === cardId);
+  if (!events.some((event) => mapTimelineMonthSerial(event.occurredAt) === null)) {
+    events.forEach((event) => { event.timelinePosition = mapTimelineMonthSerial(event.occurredAt); });
+    return;
+  }
+  const ordered = [...events].sort((a, b) => {
+    const aOrder = Number.isFinite(Number(a.timelinePosition)) ? Number(a.timelinePosition) : Number(a.order ?? a.createdAt ?? 0);
+    const bOrder = Number.isFinite(Number(b.timelinePosition)) ? Number(b.timelinePosition) : Number(b.order ?? b.createdAt ?? 0);
+    return aOrder - bOrder || String(a.id).localeCompare(String(b.id));
+  });
+  const knownMonths = ordered.map((event) => mapTimelineMonthSerial(event.occurredAt)).filter((value) => value !== null);
+  let nextMonth = knownMonths.length
+    ? Math.min(...knownMonths) - ordered.filter((event) => mapTimelineMonthSerial(event.occurredAt) === null).length
+    : mapTimelineMonthSerial(currentMapTimelineMonth()) - Math.max(0, ordered.length - 1);
+  ordered.forEach((event) => {
+    const existingMonth = mapTimelineMonthSerial(event.occurredAt);
+    if (existingMonth === null) event.occurredAt = mapTimelineMonthValue(nextMonth);
+    event.timelinePosition = mapTimelineMonthSerial(event.occurredAt);
+    nextMonth = event.timelinePosition + 1;
+  });
+}
+
 function mapTimelineEvents(map, cardId = selectedMapTrackCardId) {
+  ensureMapTimelineEventMonths(map, cardId);
   return (Array.isArray(map?.timelineEvents) ? map.timelineEvents : [])
     .filter((event) => !cardId || event.cardId === cardId)
     .sort((a, b) => mapTimelineEventOrder(a) - mapTimelineEventOrder(b) || String(a.id).localeCompare(String(b.id)));
@@ -3463,7 +3516,8 @@ function mapTimelineType(type) {
 }
 
 function mapTimelineMomentLabel(event, index = 0) {
-  return String(event?.momentLabel || "").trim() || `Momento ${index + 1}`;
+  const formatted = mapTimelineFormattedMonth(event?.occurredAt);
+  return formatted === "Fecha sin definir" ? `Momento ${index + 1}` : formatted;
 }
 
 function mapTimelineCursorFor(events) {
@@ -3688,7 +3742,7 @@ function renderMapTimelineDraft(campaign, draft) {
     <header><div><small>NUEVO HITO</small><strong>${escapeHtml(card.title)}</strong></div><button type="button" data-action="cancel-map-timeline-draft" aria-label="Cerrar">×</button></header>
     <label><span>Qué ocurrió</span><select class="select" name="type">${Object.entries(MAP_TIMELINE_EVENT_TYPES).map(([key, type]) => `<option value="${key}">${type.icon} ${type.label}</option>`).join("")}</select></label>
     <label><span>Lugar o ciudad</span><input class="input" name="placeName" placeholder="Ej: Puertas de Luminar" autofocus /></label>
-    <label><span>Momento de la historia</span><input class="input" name="momentLabel" placeholder="Ej: Día 14 de la Era del Cuervo" required /></label>
+    <label><span>Mes y año</span><input class="input" type="month" name="occurredAt" value="${currentMapTimelineMonth()}" required /></label>
     <label><span>Nota</span><textarea class="textarea" name="note" rows="2" placeholder="Qué pasó en este punto..."></textarea></label>
     <button class="button primary" type="submit">Guardar hito</button>
   </form>`;
@@ -3717,7 +3771,7 @@ function renderMapTimelineEdit(campaign, map, canManage) {
     <header><div><small>${isDateOnly ? "CAMBIAR FECHA" : "EDITAR HITO"}</small><strong>${escapeHtml(event.placeName || "Hito")}</strong></div><button type="button" data-action="cancel-map-timeline-edit" aria-label="Cerrar">×</button></header>
     <input type="hidden" name="eventId" value="${event.id}" /><input type="hidden" name="mode" value="${draft.mode}" />
     ${isDateOnly ? "" : `<label><span>Qué ocurrió</span><select class="select" name="type">${Object.entries(MAP_TIMELINE_EVENT_TYPES).map(([key, type]) => `<option value="${key}" ${event.type === key ? "selected" : ""}>${type.icon} ${type.label}</option>`).join("")}</select></label><label><span>Lugar o ciudad</span><input class="input" name="placeName" value="${escapeAttr(event.placeName || "")}" /></label>`}
-    <label><span>Momento de la historia</span><input class="input" name="momentLabel" value="${escapeAttr(mapTimelineMomentLabel(event))}" placeholder="Ej: Día 14 de la Era del Cuervo" required autofocus /></label>
+    <label><span>Mes y año</span><input class="input" type="month" name="occurredAt" value="${escapeAttr(event.occurredAt || currentMapTimelineMonth())}" required autofocus /></label>
     ${isDateOnly ? "" : `<label><span>Nota</span><textarea class="textarea" name="note" rows="3">${escapeHtml(event.note || "")}</textarea></label>`}
     <button class="button primary" type="submit">Guardar cambios</button>
   </form></div>`;
@@ -6676,7 +6730,8 @@ function moveMapTimelineEventPosition(mapId, eventId, position, cardId = selecte
   const currentIndex = events.findIndex((item) => item.id === eventId);
   if (currentIndex < 0) return;
   const timelineEvent = events[currentIndex];
-  timelineEvent.timelinePosition = Number(position);
+  timelineEvent.timelinePosition = Math.round(Number(position));
+  timelineEvent.occurredAt = mapTimelineMonthValue(timelineEvent.timelinePosition);
   const reordered = mapTimelineEvents(map, cardId);
   selectedMapTimelineEventId = eventId;
   mapTimelineCursor = reordered.findIndex((event) => event.id === eventId);
@@ -6704,22 +6759,22 @@ function saveMapTimelineEvent(data) {
   const map = mapsFor(campaign).find((item) => item.id === draft?.mapId);
   const card = wikiCardsFor(campaign).find((item) => item.id === draft?.cardId);
   if (!campaign || !map || !card || !canManageCampaign(campaign, currentUser().id)) return;
-  const momentLabel = String(data.momentLabel || "").trim();
-  if (!momentLabel) {
-    showToast("Escribí un momento de la historia para el hito.");
+  const occurredAt = String(data.occurredAt || "").trim();
+  const monthPosition = mapTimelineMonthSerial(occurredAt);
+  if (monthPosition === null) {
+    showToast("Elegí el mes y año del hito.");
     return;
   }
   const existingEvents = mapTimelineEvents(map, card.id);
-  const nextPosition = existingEvents.length ? mapTimelinePosition(existingEvents[existingEvents.length - 1], existingEvents.length - 1) + 100 : 0;
   const event = {
     id: uid("timeline"),
     cardId: card.id,
     type: MAP_TIMELINE_EVENT_TYPES[data.type] ? data.type : "seen",
     placeName: String(data.placeName || "").trim(),
-    momentLabel,
+    occurredAt,
     note: String(data.note || "").trim(),
     order: existingEvents.length,
-    timelinePosition: nextPosition,
+    timelinePosition: monthPosition,
     x: Math.max(0, Math.min(100, Number(draft.x))),
     y: Math.max(0, Math.min(100, Number(draft.y))),
     createdAt: Date.now(),
@@ -6739,10 +6794,12 @@ function saveMapTimelineEventEdit(data) {
   const campaign = campaignById(activeCampaignId);
   const map = mapsFor(campaign).find((item) => item.id === selectedMapId);
   const event = map?.timelineEvents?.find((item) => item.id === data.eventId);
-  const momentLabel = String(data.momentLabel || "").trim();
+  const occurredAt = String(data.occurredAt || "").trim();
+  const monthPosition = mapTimelineMonthSerial(occurredAt);
   if (!campaign || !map || !event || !canManageCampaign(campaign, currentUser().id)) return;
-  if (!momentLabel) { showToast("Escribí un momento de la historia para el hito."); return; }
-  event.momentLabel = momentLabel;
+  if (monthPosition === null) { showToast("Elegí el mes y año del hito."); return; }
+  event.occurredAt = occurredAt;
+  event.timelinePosition = monthPosition;
   if (data.mode === "edit") {
     event.type = MAP_TIMELINE_EVENT_TYPES[data.type] ? data.type : event.type;
     event.placeName = String(data.placeName || "").trim();
@@ -6752,7 +6809,7 @@ function saveMapTimelineEventEdit(data) {
   mapTimelineEdit = null;
   saveState();
   render();
-  showToast(data.mode === "date" ? "Fecha narrativa actualizada." : "Hito actualizado.");
+  showToast(data.mode === "date" ? "Fecha actualizada." : "Hito actualizado.");
 }
 
 function setMapTimelineEventFirst(eventId) {
@@ -6762,7 +6819,8 @@ function setMapTimelineEventFirst(eventId) {
   if (!campaign || !map || !event || !canManageCampaign(campaign, currentUser().id)) return;
   const events = mapTimelineEvents(map, event.cardId).filter((item) => item.id !== event.id);
   const earliest = events.length ? Math.min(...events.map((item, index) => mapTimelinePosition(item, index))) : 0;
-  event.timelinePosition = earliest - 100;
+  event.timelinePosition = earliest - 1;
+  event.occurredAt = mapTimelineMonthValue(event.timelinePosition);
   selectedMapTimelineEventId = event.id;
   mapTimelineCursor = 0;
   mapTimelineContextMenu = null;
