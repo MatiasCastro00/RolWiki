@@ -427,6 +427,7 @@ let selectedMapPointId = null;
 let mapPointPicker = null;
 let mapElementsHidden = false;
 let mapIgnorePointClickUntil = 0;
+let mapIgnoreTimelineEventClickUntil = 0;
 const mapViewMemory = new Map();
 let selectedMapTrackCardId = null;
 let selectedMapTimelineEventId = null;
@@ -1851,7 +1852,19 @@ function initializeMapRuntime() {
   }, { passive: false });
 
   viewport.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0 || event.target.closest(".map-upload-button, .map-overlay-tools, .map-context-picker, .map-click-choice, .map-point-info, .map-timeline-editor, .map-timeline-event-info, .map-timeline-panel, .map-timeline-event")) return;
+    const timelineMarker = event.target.closest("[data-map-timeline-event]");
+    if (event.button !== 0) return;
+    if (timelineMarker) {
+      if (event.target.closest(".map-timeline-event-info") || viewport.dataset.canManage !== "true" || !mapTimelineEditingUnlocked) return;
+      state.gesture = {
+        kind: "move-timeline-event", pointerId: event.pointerId, eventId: timelineMarker.dataset.eventId,
+        startX: event.clientX, startY: event.clientY, moved: false,
+      };
+      viewport.setPointerCapture(event.pointerId);
+      event.preventDefault();
+      return;
+    }
+    if (event.target.closest(".map-upload-button, .map-overlay-tools, .map-context-picker, .map-click-choice, .map-point-info, .map-timeline-editor, .map-timeline-event-info, .map-timeline-panel")) return;
     const pointTrigger = event.target.closest(".map-point-trigger");
     if (pointTrigger) {
       if (viewport.dataset.canManage !== "true") return;
@@ -1899,6 +1912,20 @@ function initializeMapRuntime() {
       event.preventDefault();
       return;
     }
+    if (gesture.kind === "move-timeline-event") {
+      const distance = Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY);
+      if (distance > 4) gesture.moved = true;
+      if (!gesture.moved) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100));
+      const y = Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100));
+      const marker = canvas.querySelector(`[data-map-timeline-event][data-event-id="${gesture.eventId}"]`);
+      if (marker) { marker.style.left = `${x}%`; marker.style.top = `${y}%`; }
+      gesture.x = x;
+      gesture.y = y;
+      event.preventDefault();
+      return;
+    }
     const rect = canvas.getBoundingClientRect();
     gesture.points.push({ x: ((event.clientX - rect.left) / rect.width) * 100, y: ((event.clientY - rect.top) / rect.height) * 100 });
     drawing.innerHTML = `${drawing.innerHTML.replace(/<polyline class="map-current-stroke"[^>]*\/>/, "")}<polyline class="map-current-stroke" points="${gesture.points.map((point) => `${point.x * 10},${point.y * 10}`).join(" ")}" />`;
@@ -1916,6 +1943,18 @@ function initializeMapRuntime() {
       } else {
         selectedMapPointId = selectedMapPointId === gesture.pointId ? null : gesture.pointId;
         mapPointPicker = null;
+        render();
+      }
+      return;
+    } else if (gesture.kind === "move-timeline-event") {
+      mapIgnoreTimelineEventClickUntil = Date.now() + 250;
+      state.gesture = null;
+      if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
+      if (gesture.moved) {
+        moveMapTimelineEventOnMap(viewport.dataset.mapId, gesture.eventId, gesture.x, gesture.y);
+      } else {
+        selectedMapTimelineEventId = selectedMapTimelineEventId === gesture.eventId ? null : gesture.eventId;
+        selectedMapPointId = null;
         render();
       }
       return;
@@ -3623,7 +3662,7 @@ function renderMapTimelineMarkers(campaign, map, events, cursor, canManage) {
   const markers = events.map((event, index) => {
     const type = mapTimelineType(event.type);
     const selected = selectedMapTimelineEventId === event.id;
-    return `<div class="map-timeline-event ${selected ? "selected" : ""}" data-map-timeline-event data-event-id="${event.id}" data-event-step="${index}" data-event-x="${Number(event.x)}" data-event-y="${Number(event.y)}" style="left:${Number(event.x)}%;top:${Number(event.y)}%;--event-color:${type.color}" ${index > cursor ? "hidden" : ""}>
+    return `<div class="map-timeline-event ${selected ? "selected" : ""} ${canManage && mapTimelineEditingUnlocked ? "unlocked" : ""}" data-map-timeline-event data-event-id="${event.id}" data-event-step="${index}" data-event-x="${Number(event.x)}" data-event-y="${Number(event.y)}" style="left:${Number(event.x)}%;top:${Number(event.y)}%;--event-color:${type.color}" ${index > cursor ? "hidden" : ""}>
       <button data-action="select-map-timeline-event" data-id="${event.id}" title="${escapeAttr(`${type.label}: ${event.placeName || card?.title || "Hito"}.`)}"><span>${type.icon}</span><b>${index + 1}</b></button>
       ${selected ? renderMapTimelineEventInfo(event, type, canManage, index) : ""}
     </div>`;
@@ -5106,6 +5145,7 @@ document.addEventListener("click", async (event) => {
   }
 
   if (action === "select-map-timeline-event") {
+    if (Date.now() < mapIgnoreTimelineEventClickUntil) return;
     selectedMapTimelineEventId = selectedMapTimelineEventId === id ? null : id;
     selectedMapPointId = null;
     render();
@@ -6643,6 +6683,19 @@ function moveMapTimelineEventPosition(mapId, eventId, position, cardId = selecte
   saveState();
   render();
   showToast("Posición del hito actualizada.");
+}
+
+function moveMapTimelineEventOnMap(mapId, eventId, x, y) {
+  const campaign = campaignById(activeCampaignId);
+  const map = mapsFor(campaign).find((item) => item.id === mapId);
+  const timelineEvent = map?.timelineEvents?.find((item) => item.id === eventId);
+  if (!campaign || !map || !timelineEvent || !mapTimelineEditingUnlocked || !canManageCampaign(campaign, currentUser().id)) return;
+  timelineEvent.x = Math.max(0, Math.min(100, Number(x)));
+  timelineEvent.y = Math.max(0, Math.min(100, Number(y)));
+  selectedMapTimelineEventId = eventId;
+  saveState();
+  render();
+  showToast("Ubicación del hito actualizada.");
 }
 
 function saveMapTimelineEvent(data) {
