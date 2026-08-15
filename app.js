@@ -1982,7 +1982,11 @@ function initializeMapTimelineHandleRuntime() {
     const handle = track.querySelector(`[data-map-timeline-handle][data-event-id="${drag.eventId}"]`);
     if (handle) handle.style.left = `${ratio * 100}%`;
     const readout = track.querySelector("[data-map-timeline-drag-readout]");
-    if (readout) { readout.textContent = mapTimelineMoveLabel(events, drag.eventId, position); readout.hidden = false; }
+    if (readout) {
+      readout.textContent = mapTimelineMoveLabel(events, drag.eventId, position);
+      readout.style.left = `${ratio * 100}%`;
+      readout.hidden = false;
+    }
     event.preventDefault();
   });
   track.addEventListener("pointerup", finish);
