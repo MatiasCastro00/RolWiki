@@ -63,7 +63,7 @@ Mientras todos usen el mismo proyecto de Supabase, las cuentas, campanas, invita
 - Recomendar jugadores que ya participaron en campanas creadas por vos.
 - Aceptar invitaciones.
 - Crear y editar personajes por jugador.
-- Seguir personajes, jugadores y objetos sobre el mapa con hitos fechados, ciudades y una ruta punteada reproducible desde su inicio hasta la actualidad.
+- Seguir personajes, jugadores y objetos sobre el mapa con hitos narrativos, ciudades y una ruta punteada reproducible desde su inicio hasta la actualidad.
 - Panel de miembros y ajustes de campana.
 
 ## Nota
