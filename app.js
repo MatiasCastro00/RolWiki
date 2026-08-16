@@ -426,6 +426,7 @@ let mapRuntime = null;
 let selectedMapPointId = null;
 let mapPointPicker = null;
 let mapElementsHidden = false;
+let mapExplorerCollapsed = false;
 let mapIgnorePointClickUntil = 0;
 let mapIgnoreTimelineEventClickUntil = 0;
 const mapViewMemory = new Map();
@@ -3608,8 +3609,12 @@ function mapTimelinePositionAt(events, cursor) {
 function mapTrackCards(campaign, map) {
   const eventCount = new Map();
   mapTimelineEvents(map, null).forEach((event) => eventCount.set(event.cardId, (eventCount.get(event.cardId) || 0) + 1));
+  const cardsOnMap = new Set([
+    ...(map.points || []).map((point) => point.cardId),
+    ...eventCount.keys(),
+  ]);
   const preferredTypes = new Set(["personaje", "player", "objeto"]);
-  return [...wikiCardsFor(campaign)].sort((a, b) =>
+  return wikiCardsFor(campaign).filter((card) => cardsOnMap.has(card.id)).sort((a, b) =>
     Number(eventCount.has(b.id)) - Number(eventCount.has(a.id))
     || Number(preferredTypes.has(b.type)) - Number(preferredTypes.has(a.type))
     || a.title.localeCompare(b.title, "es")
@@ -3618,7 +3623,7 @@ function mapTrackCards(campaign, map) {
 
 function renderMapUploadControl(map, canManage) {
   if (!map || !canManage) return "";
-  return `<label class="button map-upload-button" title="Subir imagen del mapa">Imagen<input data-map-image-file data-map-id="${map.id}" type="file" accept="image/*" /></label>`;
+  return `<label class="button map-upload-button" title="Subir imagen del mapa">Subir<input data-map-image-file data-map-id="${map.id}" type="file" accept="image/*" /></label>`;
 }
 
 function renderWikiMapUploadControl(map, canManage) {
@@ -3682,12 +3687,10 @@ function renderMapsPage(campaign, role, canManage) {
     : `<div class="map-empty-stage"><span>⌖</span><h2>${canManage ? "Creá el primer mapa" : "No hay mapas para explorar"}</h2><p>${canManage ? "Elegí una tarjeta con imagen para convertirla en un mapa navegable." : "Cuando el equipo agregue un mapa aparecerá aquí."}</p>${canManage ? `<button class="button primary" data-action="new-map">Crear mapa</button>` : ""}</div>`;
 
   return `
-    <section class="maps-workspace">
-      <aside class="maps-browser">${sidebar}</aside>
+    <section class="maps-workspace ${mapExplorerCollapsed ? "explorer-collapsed" : ""}">
+      <aside class="maps-browser" id="map-explorer">${sidebar}</aside>
+      <button class="map-explorer-toggle" data-action="toggle-map-explorer" aria-controls="map-explorer" aria-expanded="${!mapExplorerCollapsed}" title="${mapExplorerCollapsed ? "Mostrar explorador" : "Ocultar explorador"}">${mapExplorerCollapsed ? "›" : "‹"}</button>
       <section class="maps-main">
-        <header class="maps-header"><div><span>ATLAS DE LA PARTIDA</span><h1>${escapeHtml(selected ? mapCardFor(campaign, selected)?.title || "Mapa" : "Mapas")}</h1></div>
-          ${selected ? `<div class="map-tools"><button class="map-tool" data-action="map-zoom-out" title="Alejar">−</button><button class="map-tool" data-action="map-reset" title="Restablecer vista">⌖</button><button class="map-tool" data-action="map-zoom-in" title="Acercar">+</button>${isPlayer && settings.playersCanDraw ? `<button class="button ${mapDrawMode ? "primary" : ""}" data-action="toggle-map-draw">✎ ${mapDrawMode ? "Dibujando" : "Dibujar"}</button>` : ""}</div>` : ""}
-        </header>
         ${main}
         ${selected ? renderMapTimelineContextMenu(campaign, selected, canManage) : ""}
         ${selected ? renderMapTimelineEdit(campaign, selected, canManage) : ""}
@@ -3729,7 +3732,7 @@ function renderMapStage(campaign, map, canManage, isPlayer, settings) {
   const clickChoice = mapClickChoice?.mapId === map.id ? renderMapClickChoice(campaign, mapClickChoice) : "";
   const timelineDraft = mapTimelineDraft?.mapId === map.id ? renderMapTimelineDraft(campaign, mapTimelineDraft) : "";
   const image = mapImage ? `<img class="map-image" data-map-image draggable="false" src="${escapeAttr(mapImage)}" alt="Mapa ${escapeAttr(card?.title || "Mapa")}" />` : `<div class="map-placeholder-art"><span>⌖</span><strong>${escapeHtml(card?.title || "Mapa")}</strong><small>Subí una imagen para usarla como mapa.</small></div>`;
-  return `<div class="map-viewport" data-map-viewport data-map-id="${map.id}" data-can-manage="${canManage}" data-can-draw="${canDraw && mapDrawMode}" data-has-selected-track="${Boolean(selectedMapTrackCardId)}" style="--stroke-duration:${settings.strokeDuration}s">${renderMapUploadControl(map, canManage)}<div class="map-overlay-tools"><button class="map-tool ${mapElementsHidden ? "active" : ""}" data-action="toggle-map-elements" title="${mapElementsHidden ? "Mostrar elementos" : "Ocultar elementos"}">◉</button>${canManage ? `<button class="button ${mapDrawMode ? "primary" : ""}" data-action="toggle-map-draw">✎ ${mapDrawMode ? "Dibujando" : "Dibujar"}</button>` : ""}</div>${pointPicker}${clickChoice}${timelineDraft}
+  return `<div class="map-viewport" data-map-viewport data-map-id="${map.id}" data-can-manage="${canManage}" data-can-draw="${canDraw && mapDrawMode}" data-has-selected-track="${Boolean(selectedMapTrackCardId)}" style="--stroke-duration:${settings.strokeDuration}s">${renderMapUploadControl(map, canManage)}<div class="map-overlay-tools"><div class="map-overlay-primary"><button class="map-tool ${mapElementsHidden ? "active" : ""}" data-action="toggle-map-elements" title="${mapElementsHidden ? "Mostrar elementos" : "Ocultar elementos"}">◉</button>${canDraw ? `<button class="button ${mapDrawMode ? "primary" : ""}" data-action="toggle-map-draw">✎ ${mapDrawMode ? "Dibujando" : "Dibujar"}</button>` : ""}</div><div class="map-overlay-zoom"><button class="map-tool" data-action="map-zoom-out" title="Alejar">−</button><button class="map-tool" data-action="map-zoom-in" title="Acercar">+</button></div></div>${pointPicker}${clickChoice}${timelineDraft}
     <div class="map-world" data-map-world><div class="map-canvas" data-map-canvas>${image}
       <svg class="map-drawing-layer" data-map-drawing viewBox="0 0 1000 1000" preserveAspectRatio="none">${strokes.map((stroke) => `<polyline class="map-player-stroke" points="${stroke.points.map((point) => `${Number(point.x) * 10},${Number(point.y) * 10}`).join(" ")}" style="animation-delay:-${Math.max(0, (Date.now() - stroke.createdAt) / 1000)}s" />`).join("")}${mapElementsHidden ? "" : renderMapTimelineRoute(timelineEvents, timelineCursor)}</svg>
       ${mapElementsHidden ? "" : points.map((point) => renderMapPoint(campaign, map, point)).join("")}
@@ -3833,7 +3836,7 @@ function renderMapTimelineEdit(campaign, map, canManage) {
 
 function renderMapTimelinePanel(campaign, map, canManage) {
   const card = wikiCardsFor(campaign).find((item) => item.id === selectedMapTrackCardId);
-  if (!card) return `<section class="map-timeline-panel empty"><div><span>LÍNEA DE TIEMPO</span><strong>Elegí una ficha de la izquierda</strong><small>Vas a ver dónde estuvo y el camino que recorrió.</small></div></section>`;
+  if (!card) return "";
   const events = mapTimelineEvents(map, card.id);
   if (!events.length) return `<section class="map-timeline-panel empty"><div>${renderWikiThumb(card)}<span>LÍNEA DE TIEMPO</span><strong>${escapeHtml(card.title)} todavía no tiene recorrido</strong><small>${canManage ? "Hacé click derecho en el mapa y elegí Hito para comenzar su historia." : "Cuando se agreguen hitos, el recorrido aparecerá acá."}</small></div></section>`;
   const cursor = mapTimelineCursorFor(events);
@@ -3924,7 +3927,8 @@ function updateMapTimelineView(value) {
 
 function renderMapPoint(campaign, map, point) {
   const selected = selectedMapPointId === point.id;
-  return `<div class="map-point ${selected ? "selected" : ""}" data-point-id="${point.id}" style="left:${Number(point.x)}%;top:${Number(point.y)}%">
+  const tracked = selectedMapTrackCardId === point.cardId;
+  return `<div class="map-point ${selected ? "selected" : ""} ${tracked ? "tracked" : ""}" data-point-id="${point.id}" style="left:${Number(point.x)}%;top:${Number(point.y)}%">
     <button class="map-point-trigger" data-action="toggle-map-point" data-id="${point.id}" data-point-id="${point.id}" title="${escapeAttr(point.card.title)}"><span>${escapeHtml(wikiType(point.card).icon)}</span><b>${escapeHtml(point.card.title)}</b></button>
     ${selected ? renderMapPointInfo(campaign, point) : ""}
   </div>`;
@@ -5197,6 +5201,11 @@ document.addEventListener("click", async (event) => {
     render();
   }
 
+  if (action === "toggle-map-explorer") {
+    mapExplorerCollapsed = !mapExplorerCollapsed;
+    render();
+  }
+
   if (action === "create-map-from-card") createMapFromCard(id);
 
   if (action === "select-map") {
@@ -5219,6 +5228,7 @@ document.addEventListener("click", async (event) => {
 
   if (action === "select-map-track") {
     selectedMapTrackCardId = selectedMapTrackCardId === id ? null : id;
+    if (selectedMapTrackCardId) mapElementsHidden = false;
     selectedMapTimelineEventId = null;
     selectedMapPointId = null;
     mapTimelineCursor = null;
