@@ -432,6 +432,9 @@ const mapViewMemory = new Map();
 let selectedMapTrackCardId = null;
 let selectedMapTimelineEventId = null;
 let mapTimelineCursor = null;
+let mapTimelinePlaying = false;
+let mapTimelinePlaybackFrame = null;
+let mapTimelinePlaybackLastTime = 0;
 let mapTimelineEditingUnlocked = false;
 let mapTimelineContextMenu = null;
 let mapTimelineEdit = null;
@@ -1798,6 +1801,9 @@ function teardownWikiGraphs() {
 
 function teardownMapRuntime() {
   if (mapRuntime?.mapId && mapRuntime.snapshot) mapViewMemory.set(mapRuntime.mapId, mapRuntime.snapshot());
+  if (mapTimelinePlaybackFrame !== null) cancelAnimationFrame(mapTimelinePlaybackFrame);
+  mapTimelinePlaybackFrame = null;
+  mapTimelinePlaybackLastTime = 0;
   mapRuntime = null;
 }
 
@@ -1973,6 +1979,7 @@ function initializeMapRuntime() {
   viewport.addEventListener("pointerup", finish);
   viewport.addEventListener("pointercancel", finish);
   initializeMapTimelineHandleRuntime();
+  initializeMapTimelinePlaybackRuntime();
 }
 
 function initializeMapTimelineHandleRuntime() {
@@ -1990,7 +1997,7 @@ function initializeMapTimelineHandleRuntime() {
       const index = events.findIndex((item) => item.id === activeDrag.eventId);
       if (index >= 0) {
         selectedMapTimelineEventId = activeDrag.eventId;
-        mapTimelineCursor = index;
+        mapTimelineCursor = mapTimelinePosition(events[index], index);
         render();
       }
       return;
@@ -2038,6 +2045,42 @@ function initializeMapTimelineHandleRuntime() {
     event.stopPropagation();
     openMapTimelineContextMenu(track.dataset.mapId, handle.dataset.eventId, event.clientX, event.clientY);
   });
+}
+
+function initializeMapTimelinePlaybackRuntime() {
+  if (!mapTimelinePlaying || mapTimelinePlaybackFrame !== null) return;
+  const campaign = campaignById(activeCampaignId);
+  const map = mapsFor(campaign).find((item) => item.id === selectedMapId);
+  const events = mapTimelineEvents(map, selectedMapTrackCardId);
+  if (!events.length) {
+    mapTimelinePlaying = false;
+    return;
+  }
+  const layout = mapTimelineLayout(events);
+  mapTimelinePlaybackLastTime = performance.now();
+  const duration = Math.max(4500, Math.min(30000, layout.span * 900));
+  const tick = (time) => {
+    if (!mapTimelinePlaying) {
+      mapTimelinePlaybackFrame = null;
+      return;
+    }
+    const elapsed = Math.max(0, time - mapTimelinePlaybackLastTime);
+    mapTimelinePlaybackLastTime = time;
+    const current = mapTimelineCursorFor(events);
+    const next = Math.min(layout.maximum, current + layout.span * elapsed / duration);
+    const range = document.querySelector("[data-map-timeline-range]");
+    if (range) range.value = String(next);
+    updateMapTimelineView(next);
+    if (next >= layout.maximum - 0.001) {
+      mapTimelineCursor = layout.maximum;
+      mapTimelinePlaying = false;
+      mapTimelinePlaybackFrame = null;
+      render();
+      return;
+    }
+    mapTimelinePlaybackFrame = requestAnimationFrame(tick);
+  };
+  mapTimelinePlaybackFrame = requestAnimationFrame(tick);
 }
 
 function setupWikiGraph(graph) {
@@ -3195,8 +3238,6 @@ function renderWikiSectionShell({ section, kicker, title, description, sidebar, 
           ${primaryAction}
         </div>
         ${main}
-        ${selected ? renderMapTimelineContextMenu(campaign, selected, canManage) : ""}
-        ${selected ? renderMapTimelineEdit(campaign, selected, canManage) : ""}
       </section>
       ${aside ? `<aside class="wiki-management-aside">${aside}</aside>` : ""}
     </section>
@@ -3453,8 +3494,8 @@ function mapTimelineLayout(events) {
   const positions = events.map((event, index) => mapTimelinePosition(event, index));
   const minimum = positions.length ? Math.min(...positions) : mapTimelineMonthSerial(currentMapTimelineMonth());
   const highest = positions.length ? Math.max(...positions) : minimum;
-  const padding = Math.max(1, Math.ceil((highest - minimum) * 0.2));
-  const maximum = highest + padding;
+  const currentMonth = mapTimelineMonthSerial(currentMapTimelineMonth());
+  const maximum = Math.max(highest, currentMonth) > minimum ? Math.max(highest, currentMonth) : minimum + 1;
   return {
     minimum,
     maximum,
@@ -3521,19 +3562,29 @@ function mapTimelineMomentLabel(event, index = 0) {
 }
 
 function mapTimelineCursorFor(events) {
-  const end = events.length;
-  const requested = mapTimelineCursor === null ? end : Number(mapTimelineCursor);
-  return Math.max(0, Math.min(end, Number.isFinite(requested) ? requested : end));
+  const layout = mapTimelineLayout(events);
+  const requested = mapTimelineCursor === null ? layout.maximum : Number(mapTimelineCursor);
+  return Math.max(layout.minimum, Math.min(layout.maximum, Number.isFinite(requested) ? requested : layout.maximum));
 }
 
 function mapTimelineReadout(events, cursor) {
   if (!events.length) return "Sin hitos";
-  if (cursor >= events.length) return "Actualidad";
-  const startIndex = Math.max(0, Math.floor(cursor));
-  const endIndex = Math.min(events.length - 1, Math.ceil(cursor));
-  const start = mapTimelineMomentLabel(events[startIndex], startIndex);
-  if (startIndex === endIndex) return start;
-  return `Entre ${start} y ${mapTimelineMomentLabel(events[endIndex], endIndex)}`;
+  return mapTimelineFormattedMonth(mapTimelineMonthValue(cursor));
+}
+
+function mapTimelineStepForMonth(events, cursor) {
+  if (!events.length) return 0;
+  const value = Number(cursor);
+  const first = mapTimelinePosition(events[0], 0);
+  if (value <= first) return 0;
+  for (let index = 1; index < events.length; index += 1) {
+    const previous = mapTimelinePosition(events[index - 1], index - 1);
+    const next = mapTimelinePosition(events[index], index);
+    if (value > next) continue;
+    const ratio = next === previous ? 1 : Math.max(0, Math.min(1, (value - previous) / (next - previous)));
+    return index - 1 + ratio;
+  }
+  return events.length;
 }
 
 function mapTimelinePositionAt(events, cursor) {
@@ -3638,6 +3689,8 @@ function renderMapsPage(campaign, role, canManage) {
           ${selected ? `<div class="map-tools"><button class="map-tool" data-action="map-zoom-out" title="Alejar">−</button><button class="map-tool" data-action="map-reset" title="Restablecer vista">⌖</button><button class="map-tool" data-action="map-zoom-in" title="Acercar">+</button>${isPlayer && settings.playersCanDraw ? `<button class="button ${mapDrawMode ? "primary" : ""}" data-action="toggle-map-draw">✎ ${mapDrawMode ? "Dibujando" : "Dibujar"}</button>` : ""}</div>` : ""}
         </header>
         ${main}
+        ${selected ? renderMapTimelineContextMenu(campaign, selected, canManage) : ""}
+        ${selected ? renderMapTimelineEdit(campaign, selected, canManage) : ""}
         ${selected ? `<footer class="map-status">${canManage && selectedMapTrackCardId ? "Hacé click derecho en el mapa para crear una tarjeta o un hito de la ficha seleccionada." : canManage ? "Seleccioná una ficha de la izquierda o usá click derecho para vincular cualquier tarjeta." : isPlayer && settings.playersCanDraw ? `Podés navegar y ${mapDrawMode ? "dibujar" : "activar Dibujo"}; los trazos se borran en ${settings.strokeDuration}s.` : "Seleccioná una ficha para recorrer su historia en el mapa."}</footer>` : ""}
       </section>
     </section>
@@ -3668,7 +3721,8 @@ function renderMapStage(campaign, map, canManage, isPlayer, settings) {
   const points = (map.points || []).map((point) => ({ ...point, card: wikiCardsFor(campaign).find((item) => item.id === point.cardId) })).filter((point) => point.card);
   const strokes = (map.playerStrokes || []).filter((stroke) => Date.now() - Number(stroke.createdAt || 0) < settings.strokeDuration * 1000);
   const timelineEvents = selectedMapTrackCardId ? mapTimelineEvents(map) : [];
-  const timelineCursor = mapTimelineCursorFor(timelineEvents);
+  const timelineMonth = mapTimelineCursorFor(timelineEvents);
+  const timelineCursor = mapTimelineStepForMonth(timelineEvents, timelineMonth);
   const mapImage = mapImageFor(campaign, map);
   const canDraw = canManage || isPlayer && settings.playersCanDraw;
   const pointPicker = mapPointPicker?.mapId === map.id ? renderMapPointPicker(campaign, mapPointPicker) : "";
@@ -3784,15 +3838,21 @@ function renderMapTimelinePanel(campaign, map, canManage) {
   if (!events.length) return `<section class="map-timeline-panel empty"><div>${renderWikiThumb(card)}<span>LÍNEA DE TIEMPO</span><strong>${escapeHtml(card.title)} todavía no tiene recorrido</strong><small>${canManage ? "Hacé click derecho en el mapa y elegí Hito para comenzar su historia." : "Cuando se agreguen hitos, el recorrido aparecerá acá."}</small></div></section>`;
   const cursor = mapTimelineCursorFor(events);
   const layout = mapTimelineLayout(events);
-  const focusedIndex = Math.min(events.length - 1, Math.max(0, Math.round(cursor)));
+  const cursorStep = mapTimelineStepForMonth(events, cursor);
+  const focusedIndex = Math.min(events.length - 1, Math.max(0, Math.round(cursorStep)));
+  const cursorPercent = ((cursor - layout.minimum) / layout.span) * 100;
+  const selectedIndex = events.findIndex((event) => event.id === selectedMapTimelineEventId);
+  const selectedEvent = selectedIndex >= 0 ? events[selectedIndex] : null;
   return `<section class="map-timeline-panel" data-map-timeline-panel>
-    <header><div>${renderWikiThumb(card)}<span><small>LÍNEA DE TIEMPO</small><strong>${escapeHtml(card.title)}</strong></span></div></header>
+    <header><div>${renderWikiThumb(card)}<span><small>LÍNEA DE TIEMPO</small><strong>${escapeHtml(card.title)}</strong></span></div>${selectedEvent && canManage ? `<button class="map-timeline-selected-edit" data-action="edit-map-timeline-direct" data-map-id="${map.id}" data-id="${selectedEvent.id}">✎ Editar</button>` : ""}</header>
     <div class="map-timeline-scrubber">
       <span>${escapeHtml(mapTimelineMomentLabel(events[0], 0))}</span>
       <div class="map-timeline-track" data-map-timeline-track data-map-id="${map.id}" data-card-id="${card.id}" data-editing-unlocked="${mapTimelineEditingUnlocked}">
-        <input data-map-timeline-range type="range" min="0" max="${events.length}" step="0.01" value="${cursor}" aria-label="Momento del recorrido" />
+        <input data-map-timeline-range type="range" min="${layout.minimum}" max="${layout.maximum}" step="0.01" value="${cursor}" aria-label="Momento del recorrido" />
+        <output class="map-timeline-date ${cursorPercent < 15 ? "align-start" : cursorPercent > 85 ? "align-end" : ""}" data-map-timeline-date style="left:${cursorPercent}%">${escapeHtml(mapTimelineReadout(events, cursor))}</output>
+        <button class="map-timeline-play ${mapTimelinePlaying ? "playing" : ""}" data-action="toggle-map-timeline-play" aria-pressed="${mapTimelinePlaying}" title="${mapTimelinePlaying ? "Pausar recorrido" : "Reproducir recorrido"}">${mapTimelinePlaying ? "⏸" : "▶"}</button>
         ${canManage ? `<button class="map-timeline-lock ${mapTimelineEditingUnlocked ? "unlocked" : ""}" data-action="toggle-map-timeline-lock" aria-pressed="${mapTimelineEditingUnlocked}" title="${mapTimelineEditingUnlocked ? "Bloquear posición de hitos" : "Desbloquear para mover hitos"}">${mapTimelineEditingUnlocked ? "🔓" : "🔒"}</button>` : ""}
-        <div class="map-timeline-handles">${events.map((event, index) => { const type = mapTimelineType(event.type); const position = layout.percent(event, index); const milestoneName = event.placeName || mapTimelineMomentLabel(event, index); return `<button class="map-timeline-handle ${mapTimelineEditingUnlocked ? "unlocked" : ""}" data-map-timeline-handle data-action="jump-map-timeline-event" data-id="${event.id}" data-event-id="${event.id}" style="left:${position}%;--event-color:${type.color}" aria-label="${escapeAttr(`Hito: ${milestoneName}`)}"><span>${type.icon}</span><span class="map-timeline-handle-tooltip"><strong>${escapeHtml(milestoneName)}</strong></span></button>`; }).join("")}</div>
+        <div class="map-timeline-handles">${events.map((event, index) => { const type = mapTimelineType(event.type); const position = layout.percent(event, index); const milestoneName = event.placeName || mapTimelineMomentLabel(event, index); const selected = selectedMapTimelineEventId === event.id; return `<button class="map-timeline-handle ${selected ? "selected" : ""} ${mapTimelineEditingUnlocked ? "unlocked" : ""}" data-map-timeline-handle data-action="jump-map-timeline-event" data-id="${event.id}" data-event-id="${event.id}" style="left:${position}%;--event-color:${type.color}" aria-label="${escapeAttr(`Hito: ${milestoneName}`)}"><span>${type.icon}</span><span class="map-timeline-handle-tooltip"><strong>${escapeHtml(milestoneName)}</strong></span></button>`; }).join("")}</div>
         <div class="map-timeline-point-labels">${events.map((event, index) => { const type = mapTimelineType(event.type); const position = layout.percent(event, index); return `<span data-map-timeline-label data-event-step="${index}" style="left:${position}%;--label-lane:${index % 2};--event-color:${type.color}" ${Math.abs(index - focusedIndex) > 2 ? "hidden" : ""}>${escapeHtml(event.placeName || type.label)}</span>`; }).join("")}</div>
         <output class="map-timeline-drag-readout" data-map-timeline-drag-readout hidden></output>
       </div>
@@ -3802,9 +3862,22 @@ function renderMapTimelinePanel(campaign, map, canManage) {
 }
 
 function updateMapTimelineView(value) {
-  const cursor = Number(value);
-  if (!Number.isFinite(cursor)) return;
-  mapTimelineCursor = cursor;
+  const cursorMonth = Number(value);
+  if (!Number.isFinite(cursorMonth)) return;
+  const campaign = campaignById(activeCampaignId);
+  const map = mapsFor(campaign).find((item) => item.id === selectedMapId);
+  const events = mapTimelineEvents(map, selectedMapTrackCardId);
+  const cursor = mapTimelineStepForMonth(events, cursorMonth);
+  mapTimelineCursor = cursorMonth;
+  const layout = mapTimelineLayout(events);
+  const dateOutput = document.querySelector("[data-map-timeline-date]");
+  if (dateOutput) {
+    dateOutput.textContent = mapTimelineReadout(events, cursorMonth);
+    const datePercent = ((cursorMonth - layout.minimum) / layout.span) * 100;
+    dateOutput.style.left = `${datePercent}%`;
+    dateOutput.classList.toggle("align-start", datePercent < 15);
+    dateOutput.classList.toggle("align-end", datePercent > 85);
+  }
   document.querySelectorAll("[data-timeline-segment]").forEach((segment) => {
     const start = Number(segment.dataset.startStep);
     const end = Number(segment.dataset.endStep);
@@ -5135,6 +5208,7 @@ document.addEventListener("click", async (event) => {
     selectedMapTrackCardId = null;
     selectedMapTimelineEventId = null;
     mapTimelineCursor = null;
+    mapTimelinePlaying = false;
     mapTimelineEditingUnlocked = false;
     mapTimelineContextMenu = null;
     mapTimelineEdit = null;
@@ -5148,6 +5222,7 @@ document.addEventListener("click", async (event) => {
     selectedMapTimelineEventId = null;
     selectedMapPointId = null;
     mapTimelineCursor = null;
+    mapTimelinePlaying = false;
     mapTimelineEditingUnlocked = false;
     mapTimelineContextMenu = null;
     mapTimelineEdit = null;
@@ -5184,9 +5259,20 @@ document.addEventListener("click", async (event) => {
   if (action === "change-map-timeline-date" || action === "edit-map-timeline-event") {
     const menu = mapTimelineContextMenu;
     if (!menu) return;
+    mapTimelinePlaying = false;
     mapTimelineEdit = { mapId: menu.mapId, eventId: id, mode: action === "change-map-timeline-date" ? "date" : "edit" };
     mapTimelineContextMenu = null;
     render();
+  }
+
+  if (action === "edit-map-timeline-direct") {
+    const mapId = target.dataset.mapId || target.closest("[data-map-timeline-track]")?.dataset.mapId || selectedMapId;
+    if (!mapId || !id) return;
+    mapTimelinePlaying = false;
+    mapTimelineEdit = { mapId, eventId: id, mode: "edit" };
+    mapTimelineContextMenu = null;
+    render();
+    return;
   }
 
   if (action === "cancel-map-timeline-edit") {
@@ -5210,13 +5296,32 @@ document.addEventListener("click", async (event) => {
     const map = mapsFor(campaign).find((item) => item.id === selectedMapId);
     const eventIndex = mapTimelineEvents(map).findIndex((item) => item.id === id);
     if (eventIndex >= 0) {
+      const events = mapTimelineEvents(map);
+      mapTimelinePlaying = false;
       selectedMapTimelineEventId = id;
-      mapTimelineCursor = eventIndex;
+      mapTimelineCursor = mapTimelinePosition(events[eventIndex], eventIndex);
       render();
     }
   }
 
+  if (action === "toggle-map-timeline-play") {
+    const campaign = campaignById(activeCampaignId);
+    const map = mapsFor(campaign).find((item) => item.id === selectedMapId);
+    const events = mapTimelineEvents(map, selectedMapTrackCardId);
+    if (!events.length) return;
+    const layout = mapTimelineLayout(events);
+    if (mapTimelinePlaying) {
+      mapTimelinePlaying = false;
+    } else {
+      mapTimelineCursor = layout.minimum;
+      selectedMapTimelineEventId = null;
+      mapTimelinePlaying = true;
+    }
+    render();
+  }
+
   if (action === "set-map-timeline-now") {
+    mapTimelinePlaying = false;
     mapTimelineCursor = null;
     selectedMapTimelineEventId = null;
     render();
@@ -5723,7 +5828,9 @@ function undoMapDeletion() {
   if (undo.kind === "timeline") {
     selectedMapTimelineEventId = undo.item.id;
     selectedMapTrackCardId = undo.item.cardId;
-    mapTimelineCursor = mapTimelineEvents(map, undo.item.cardId).findIndex((item) => item.id === undo.item.id);
+    const restoredEvents = mapTimelineEvents(map, undo.item.cardId);
+    const restoredIndex = restoredEvents.findIndex((item) => item.id === undo.item.id);
+    mapTimelineCursor = restoredIndex >= 0 ? mapTimelinePosition(restoredEvents[restoredIndex], restoredIndex) : null;
   } else selectedMapPointId = undo.item.id;
   mapUndoDeletion = null;
   saveState();
@@ -5887,6 +5994,18 @@ document.addEventListener("change", (event) => {
 document.addEventListener("input", (event) => {
   const mapTimelineInput = event.target.closest("[data-map-timeline-range]");
   if (mapTimelineInput) {
+    if (mapTimelinePlaying) {
+      mapTimelinePlaying = false;
+      if (mapTimelinePlaybackFrame !== null) cancelAnimationFrame(mapTimelinePlaybackFrame);
+      mapTimelinePlaybackFrame = null;
+      const playButton = document.querySelector("[data-action='toggle-map-timeline-play']");
+      if (playButton) {
+        playButton.textContent = "▶";
+        playButton.classList.remove("playing");
+        playButton.setAttribute("aria-pressed", "false");
+        playButton.title = "Reproducir recorrido";
+      }
+    }
     updateMapTimelineView(mapTimelineInput.value);
     return;
   }
@@ -6734,7 +6853,8 @@ function moveMapTimelineEventPosition(mapId, eventId, position, cardId = selecte
   timelineEvent.occurredAt = mapTimelineMonthValue(timelineEvent.timelinePosition);
   const reordered = mapTimelineEvents(map, cardId);
   selectedMapTimelineEventId = eventId;
-  mapTimelineCursor = reordered.findIndex((event) => event.id === eventId);
+  const reorderedIndex = reordered.findIndex((event) => event.id === eventId);
+  mapTimelineCursor = reorderedIndex >= 0 ? mapTimelinePosition(reordered[reorderedIndex], reorderedIndex) : null;
   saveState();
   render();
   showToast("Posición del hito actualizada.");
@@ -6822,7 +6942,7 @@ function setMapTimelineEventFirst(eventId) {
   event.timelinePosition = earliest - 1;
   event.occurredAt = mapTimelineMonthValue(event.timelinePosition);
   selectedMapTimelineEventId = event.id;
-  mapTimelineCursor = 0;
+  mapTimelineCursor = event.timelinePosition;
   mapTimelineContextMenu = null;
   saveState();
   render();
